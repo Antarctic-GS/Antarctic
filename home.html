@@ -1,0 +1,252 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Antarctic Landing</title>
+  <style>
+    @import url('https://fonts.googleapis.com/css2?family=Saira:ital,wght@0,100..900;1,100..900&display=swap');
+
+    /* All styles are strictly scoped to unique class names to protect index.html */
+    .home-viewport-wrapper {
+      font-family: 'Saira', sans-serif;
+      color: #e2e8f0;
+      min-height: calc(100vh - 120px);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      background: transparent;
+      overflow: hidden;
+      width: 100%;
+    }
+
+    .home-center-layout {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      text-align: center;
+      width: 100%;
+      max-width: 540px;
+      padding: 20px;
+      transform: translateY(-20px);
+    }
+
+    .brand-title {
+      font-size: 64px;
+      font-weight: 800;
+      letter-spacing: -1.5px;
+      margin-bottom: 24px;
+      background: linear-gradient(135deg, #ffffff 30%, #94a3b8 100%);
+      -webkit-background-clip: text;
+      -webkit-text-fill-color: transparent;
+      user-select: none;
+      filter: drop-shadow(0 4px 12px rgba(0,0,0,0.3));
+      background-size: 200% 200%;
+      background-position: 0% 50%;
+      transition: transform 0.35s cubic-bezier(0.2, 0.8, 0.2, 1),
+        filter 0.35s ease,
+        background-position 0.65s ease,
+        letter-spacing 0.35s ease;
+      cursor: default;
+    }
+
+    .brand-title:hover {
+      background-position: 100% 50%;
+      transform: translateY(-5px) scale(1.025);
+      filter:
+        drop-shadow(0 5px 12px rgba(0, 0, 0, 0.35))
+        drop-shadow(0 0 18px rgba(125, 211, 252, 0.4))
+        drop-shadow(0 0 34px rgba(96, 165, 250, 0.2));
+      letter-spacing: 0.5px;
+    }
+
+    @media (prefers-reduced-motion: reduce) {
+      .brand-title {
+        transition: none;
+      }
+    }
+
+    .portal-search-wrapper {
+      position: relative;
+      width: 100%;
+      display: flex;
+      align-items: center;
+      background: rgba(30, 41, 59, 0.4);
+      border: 1px solid rgba(255, 255, 255, 0.08);
+      border-radius: 14px;
+      padding: 0 18px;
+      height: 48px;
+      backdrop-filter: blur(12px);
+      -webkit-backdrop-filter: blur(12px);
+      box-shadow: 0 8px 32px rgba(0, 0, 0, 0.4);
+      transition: border-color 0.25s ease, background-color 0.25s ease, box-shadow 0.25s ease;
+      margin-bottom: 24px;
+    }
+
+    .portal-search-wrapper:focus-within {
+      border-color: rgba(96, 165, 250, 0.5);
+      background: rgba(30, 41, 59, 0.6);
+      box-shadow: 0 0 25px rgba(59, 130, 246, 0.15), 0 8px 32px rgba(0, 0, 0, 0.5);
+    }
+
+    .search-icon {
+      width: 18px;
+      height: 18px;
+      color: #64748b;
+      margin-right: 14px;
+      flex-shrink: 0;
+    }
+
+    .portal-input {
+      flex: 1;
+      background: transparent;
+      border: none;
+      outline: none;
+      color: #e2e8f0;
+      font-family: 'Saira', sans-serif;
+      font-size: 15px;
+    }
+
+    .portal-input::placeholder {
+      color: #475569;
+    }
+
+    /* Horizontal Shortcut Redirection Pills Container */
+    .shortcut-pills-row {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      flex-wrap: wrap;
+      gap: 12px;
+      width: 100%;
+    }
+
+    .shortcut-pill {
+      background: rgba(255, 255, 255, 0.03);
+      border: 1px solid rgba(255, 255, 255, 0.05);
+      height: 38px; /* Fixed height paired with flex layout ensures perfect squaring */
+      padding: 0 18px;
+      border-radius: 19px; /* Exactly half of height for flawless circular pill ends */
+      cursor: pointer;
+      user-select: none;
+      transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+      
+      /* FIX ENGINE: Forces icons and inline text onto the exact same visual horizontal line */
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      gap: 8px; 
+    }
+
+    .shortcut-pill:hover {
+      background: rgba(255, 255, 255, 0.06);
+      border-color: rgba(255, 255, 255, 0.12);
+      transform: translateY(-1px);
+      box-shadow: 0 4px 12px rgba(0, 0, 0, 0.2);
+    }
+
+    .shortcut-pill:active {
+      transform: translateY(0);
+      background: rgba(255, 255, 255, 0.04);
+    }
+
+    /* Vector SVG icon framing controls */
+    .pill-icon {
+      width: 16px;
+      height: 16px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      flex-shrink: 0;
+      color: #94a3b8;
+      transition: color 0.2s ease;
+    }
+
+    .pill-icon img {
+      width: 16px;
+      height: 16px;
+      display: block;
+      filter: invert(49%) sepia(9%) saturate(981%) hue-rotate(182deg) brightness(92%) contrast(88%);
+      transition: filter 0.2s ease;
+    }
+
+    .shortcut-pill:hover .pill-icon {
+      color: #e2e8f0;
+    }
+
+    .shortcut-pill:hover .pill-icon img {
+      filter: invert(96%) sepia(6%) saturate(301%) hue-rotate(182deg) brightness(103%) contrast(93%);
+    }
+
+    .pill-label {
+      font-size: 14px;
+      font-weight: 500;
+      color: #94a3b8;
+      letter-spacing: 0.2px;
+      line-height: 1; /* Eliminates text box padding boundaries from pushing down */
+      transition: color 0.2s ease;
+    }
+
+    .shortcut-pill:hover .pill-label {
+      color: #e2e8f0;
+    }
+  </style>
+</head>
+<body>
+
+  <div class="home-viewport-wrapper">
+    <div class="home-center-layout">
+      
+      <h1 class="brand-title">Antarctic</h1>
+
+      <div class="portal-search-wrapper">
+        <svg class="search-icon" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2.5">
+          <path stroke-linecap="round" stroke-linejoin="round" d="M21 21l-5.197-5.197m0 0A7.5 7.5 0 105.196 5.196a7.5 7.5 0 0010.604 10.604z" />
+        </svg>
+        <input type="text" class="portal-input" placeholder="Search web references or inputs...">
+      </div>
+
+      <!-- Quick Shortcut Navigation Module Redirection Pills Row with Inline Vectors -->
+      <div class="shortcut-pills-row">
+        
+        <!-- Games Pill -->
+        <div class="shortcut-pill" data-route="games" onclick="navigateBrowserShell('games')">
+          <div class="pill-icon">
+            <img class="sidebar-button-icon" src="assets/svg/games.svg" alt="Games Icon" />
+          </div>
+          <span class="pill-label">Games</span>
+        </div>
+
+        <!-- Apps Pill -->
+        <div class="shortcut-pill" data-route="apps" onclick="navigateBrowserShell('apps')">
+          <div class="pill-icon">
+            <img class="sidebar-button-icon" src="assets/svg/apps.svg" alt="Apps Icon" />
+          </div>
+          <span class="pill-label">Apps</span>
+        </div>
+
+        <!-- Music Pill -->
+        <div class="shortcut-pill" data-route="music" onclick="navigateBrowserShell('music')">
+          <div class="pill-icon">
+            <img class="sidebar-button-icon" src="assets/svg/music.svg" alt="Music Icon" />
+          </div>
+          <span class="pill-label">Music</span>
+        </div>
+
+        <!-- Settings Pill -->
+        <div class="shortcut-pill" data-route="settings" onclick="navigateBrowserShell('settings')">
+          <div class="pill-icon">
+            <img class="sidebar-button-icon" src="assets/svg/settings.svg" alt="Settings Icon" />
+          </div>
+          <span class="pill-label">Settings</span>
+        </div>
+
+      </div>
+
+    </div>
+  </div>
+
+  <script src="script.js"></script>
+</body>
+</html>

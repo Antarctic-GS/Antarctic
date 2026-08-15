@@ -1,0 +1,34 @@
+[
+  {
+    "title": "Eaglercraft 1.12.2",
+    "thumbnail": "assets/img/01.png",
+    "url": "storage/1/01.html",
+    "shelf": "all",
+    "shelfTitle": "All Games",
+    "tags": ["action", "strategy", "sandbox", "multiplayer"]
+  },
+  {
+    "title": "Ragdoll Archers",
+    "thumbnail": "assets/img/02.png",
+    "url": "storage/1/02.html",
+    "shelf": "all",
+    "shelfTitle": "All Games",
+    "tags": ["action", "shooting", "physics"]
+  },
+    {
+    "title": "Ragdoll Hit",
+    "thumbnail": "assets/img/03.png",
+    "url": "storage/1/03.html",
+    "shelf": "all",
+    "shelfTitle": "All Games",
+    "tags": ["action", "physics", "casual"]
+  },
+  {
+    "title": "Geometry Dash",
+    "thumbnail": "assets/img/04.png",
+    "url": "storage/1/04.html",
+    "shelf": "all",
+    "shelfTitle": "All Games",
+    "tags": ["action", "arcade", "platformer"]
+  }
+]

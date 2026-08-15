@@ -1,0 +1,4 @@
+.DS_Store
+.playwright-mcp/
+.runtime-certs/
+assets/relay/package/node_modules/

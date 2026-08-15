@@ -1,0 +1,39 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Antarctic Relay</title>
+  <style>
+    :root { color-scheme: dark; font-family: system-ui, sans-serif; }
+    * { box-sizing: border-box; }
+    body { margin: 0; min-height: 100vh; background: #0f172a; color: #e2e8f0; }
+    main { display: flex; flex-direction: column; min-height: 100vh; padding: 1rem; gap: .75rem; }
+    form { display: flex; gap: .5rem; }
+    input, button { border: 1px solid #334155; border-radius: .5rem; background: #1e293b; color: inherit; font: inherit; padding: .65rem .8rem; }
+    input { flex: 1; min-width: 0; }
+    button { cursor: pointer; background: #2563eb; border-color: #3b82f6; }
+    #relay-status { color: #94a3b8; font-size: .85rem; min-height: 1.25rem; }
+    #relay-status[data-state="error"] { color: #fca5a5; }
+    iframe { flex: 1; width: 100%; min-height: 0; border: 0; border-radius: .5rem; background: white; }
+    body.embed main { display: block; padding: 0; }
+    body.embed form, body.embed #relay-status { display: none; }
+    body.embed iframe { display: block; width: 100vw; height: 100vh; border-radius: 0; }
+  </style>
+</head>
+  <body>
+  <main>
+    <form id="relay-form">
+      <input id="relay-url" type="url" placeholder="https://example.com" aria-label="URL to proxy" autocomplete="url" required>
+      <button type="submit">Open</button>
+    </form>
+    <div id="relay-status" role="status" aria-live="polite">Starting Scramjet…</div>
+    <iframe id="relay-frame" title="Scramjet relay"></iframe>
+  </main>
+
+  <script src="./package/dist/scramjet_bundled.js"></script>
+  <script src="./package/dist/controller.api.js"></script>
+  <script src="./package/dist/epoxy-transport.js"></script>
+  <script src="./app.js"></script>
+</body>
+</html>
