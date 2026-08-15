@@ -47,10 +47,10 @@ if [[ ! -x "$WISP_BIN" ]]; then
   echo "Wisp server not found. Installing relay dependencies..."
   if command -v pnpm >/dev/null 2>&1; then
     (cd "$RELAY_PACKAGE_DIR" && pnpm install --frozen-lockfile)
-  elif command -v corepack >/dev/null 2>&1; then
-    (cd "$RELAY_PACKAGE_DIR" && corepack pnpm install --frozen-lockfile)
   elif command -v npm >/dev/null 2>&1; then
     (cd "$RELAY_PACKAGE_DIR" && npm install --no-audit --no-fund)
+  elif command -v corepack >/dev/null 2>&1; then
+    (cd "$RELAY_PACKAGE_DIR" && corepack pnpm install --frozen-lockfile)
   else
     echo "Cannot install relay dependencies: pnpm, corepack, and npm are unavailable." >&2
     exit 1
