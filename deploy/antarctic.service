@@ -1,0 +1,15 @@
+[Unit]
+Description=Antarctic web app and relay
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+WorkingDirectory=/opt/Antarctic
+ExecStart=/opt/Antarctic/scripts/start.sh
+Restart=always
+RestartSec=5
+KillSignal=SIGINT
+
+[Install]
+WantedBy=multi-user.target
