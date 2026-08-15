@@ -13,6 +13,36 @@ CERT_DIR="$ROOT_DIR/.runtime-certs"
 CERT_FILE="$CERT_DIR/antarctic.crt"
 KEY_FILE="$CERT_DIR/antarctic.key"
 
+install_node_runtime() {
+  local privilege=""
+  if [[ "$(id -u)" -ne 0 ]]; then
+    if ! command -v sudo >/dev/null 2>&1; then
+      echo "Node.js is missing and sudo is unavailable." >&2
+      exit 1
+    fi
+    privilege="sudo"
+  fi
+
+  echo "Node.js/npm not found. Installing the runtime..."
+  if command -v apt-get >/dev/null 2>&1; then
+    $privilege apt-get update
+    $privilege apt-get install -y nodejs npm
+  elif command -v dnf >/dev/null 2>&1; then
+    $privilege dnf install -y nodejs npm
+  elif command -v yum >/dev/null 2>&1; then
+    $privilege yum install -y nodejs npm
+  elif command -v apk >/dev/null 2>&1; then
+    $privilege apk add --no-cache nodejs npm
+  else
+    echo "Cannot install Node.js/npm: no supported system package manager was found." >&2
+    exit 1
+  fi
+}
+
+if ! command -v node >/dev/null 2>&1 || ! command -v npx >/dev/null 2>&1 || ! command -v npm >/dev/null 2>&1; then
+  install_node_runtime
+fi
+
 if [[ ! -x "$WISP_BIN" ]]; then
   echo "Wisp server not found. Installing relay dependencies..."
   if command -v pnpm >/dev/null 2>&1; then
