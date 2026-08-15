@@ -3,7 +3,8 @@
 set -euo pipefail
 
 ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
-WISP_BIN="$ROOT_DIR/assets/relay/package/node_modules/.bin/wisp-js-server"
+RELAY_PACKAGE_DIR="$ROOT_DIR/assets/relay/package"
+WISP_BIN="$RELAY_PACKAGE_DIR/node_modules/.bin/wisp-js-server"
 WISP_HOST="127.0.0.1"
 WISP_PORT="5001"
 WISP_TLS_PORT="5002"
@@ -13,7 +14,21 @@ CERT_FILE="$CERT_DIR/antarctic.crt"
 KEY_FILE="$CERT_DIR/antarctic.key"
 
 if [[ ! -x "$WISP_BIN" ]]; then
-  echo "Missing local Wisp server. Install assets/relay/package dependencies first." >&2
+  echo "Wisp server not found. Installing relay dependencies..."
+  if command -v pnpm >/dev/null 2>&1; then
+    (cd "$RELAY_PACKAGE_DIR" && pnpm install --frozen-lockfile)
+  elif command -v corepack >/dev/null 2>&1; then
+    (cd "$RELAY_PACKAGE_DIR" && corepack pnpm install --frozen-lockfile)
+  elif command -v npm >/dev/null 2>&1; then
+    (cd "$RELAY_PACKAGE_DIR" && npm install --no-audit --no-fund)
+  else
+    echo "Cannot install relay dependencies: pnpm, corepack, and npm are unavailable." >&2
+    exit 1
+  fi
+fi
+
+if [[ ! -x "$WISP_BIN" ]]; then
+  echo "Relay dependency installation completed, but Wisp is still unavailable." >&2
   exit 1
 fi
 
