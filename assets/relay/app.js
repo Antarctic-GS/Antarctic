@@ -23,8 +23,20 @@ function assetPath(file) {
 }
 
 function setStatus(message, isError = false) {
-  statusElement.textContent = message;
+  const messageElement = statusElement.querySelector(".relay-status-message");
+  if (messageElement) {
+    messageElement.textContent = message;
+  } else {
+    statusElement.textContent = message;
+  }
   statusElement.dataset.state = isError ? "error" : "ready";
+  statusElement.classList.remove("is-hidden");
+  statusElement.setAttribute("aria-busy", String(!isError));
+}
+
+function hideLoadingScreen() {
+  statusElement.classList.add("is-hidden");
+  statusElement.setAttribute("aria-busy", "false");
 }
 
 function getWispUrl() {
@@ -153,7 +165,10 @@ async function initializeRelay() {
   await controller.wait();
   frame = controller.createFrame(frameElement);
   frame.element.addEventListener("load", () => {
-    window.setTimeout(publishPageMetadata, 50);
+    window.setTimeout(() => {
+      publishPageMetadata();
+      if (currentTarget) hideLoadingScreen();
+    }, 150);
   });
   window.scramjetController = controller;
   setStatus(`Relay ready · ${getWispUrl()}`);

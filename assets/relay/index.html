@@ -7,19 +7,116 @@
   <style>
     :root { color-scheme: dark; font-family: system-ui, sans-serif; }
     * { box-sizing: border-box; }
-    body { margin: 0; min-height: 100vh; background: #0f172a; color: #e2e8f0; }
-    main { display: flex; flex-direction: column; min-height: 100vh; padding: 1rem; gap: .75rem; }
-    #relay-status { color: #94a3b8; font-size: .85rem; min-height: 1.25rem; }
-    #relay-status[data-state="error"] { color: #fca5a5; }
-    iframe { flex: 1; width: 100%; min-height: 0; border: 0; border-radius: .5rem; background: white; }
+    body { margin: 0; min-height: 100vh; overflow: hidden; background: #07101f; color: #e2e8f0; }
+    main { position: relative; display: flex; flex-direction: column; min-height: 100vh; padding: 1rem; gap: .75rem; }
+    #relay-status {
+      position: absolute;
+      z-index: 2;
+      inset: 0;
+      display: grid;
+      place-items: center;
+      overflow: hidden;
+      background:
+        radial-gradient(circle at 50% 42%, rgba(38, 176, 255, .16), transparent 27%),
+        radial-gradient(circle at 18% 80%, rgba(24, 217, 190, .12), transparent 30%),
+        linear-gradient(135deg, #07172a 0%, #090e1c 54%, #10132c 100%);
+      transition: opacity .55s ease, visibility .55s ease;
+    }
+    #relay-status::before,
+    #relay-status::after {
+      position: absolute;
+      content: "";
+      width: 32rem;
+      height: 32rem;
+      border: 1px solid rgba(139, 218, 255, .08);
+      border-radius: 50%;
+      animation: relay-drift 12s ease-in-out infinite;
+    }
+    #relay-status::after { width: 21rem; height: 21rem; animation-delay: -4s; opacity: .6; }
+    #relay-status.is-hidden { opacity: 0; visibility: hidden; }
+    #relay-status[data-state="error"] { color: #fecaca; }
+    #relay-status[data-state="error"] .relay-orbit { border-color: rgba(248, 113, 113, .75); }
+    .relay-loader {
+      position: relative;
+      width: min(22rem, calc(100vw - 2rem));
+      padding: 2.25rem 2rem 1.75rem;
+      overflow: hidden;
+      border: 1px solid rgba(192, 232, 255, .2);
+      border-radius: 1.5rem;
+      background: linear-gradient(145deg, rgba(255, 255, 255, .13), rgba(255, 255, 255, .045));
+      box-shadow: 0 1.5rem 5rem rgba(0, 0, 0, .38), inset 0 1px rgba(255, 255, 255, .18);
+      backdrop-filter: blur(22px) saturate(135%);
+      text-align: center;
+    }
+    .relay-loader::before {
+      position: absolute;
+      top: -8rem;
+      left: -35%;
+      width: 170%;
+      height: 12rem;
+      content: "";
+      background: linear-gradient(100deg, transparent, rgba(160, 232, 255, .16), transparent);
+      transform: rotate(-12deg);
+      animation: relay-shimmer 3.8s ease-in-out infinite;
+    }
+    .relay-orbit {
+      position: relative;
+      display: grid;
+      width: 5rem;
+      height: 5rem;
+      margin: 0 auto 1.5rem;
+      place-items: center;
+      border: 1px solid rgba(137, 225, 255, .34);
+      border-radius: 50%;
+      box-shadow: 0 0 2rem rgba(46, 197, 255, .22), inset 0 0 1rem rgba(46, 197, 255, .12);
+      animation: relay-pulse 2.4s ease-in-out infinite;
+    }
+    .relay-orbit::before,
+    .relay-orbit::after {
+      position: absolute;
+      content: "";
+      border: 1px solid rgba(104, 221, 255, .6);
+      border-radius: 50%;
+      inset: -.55rem .7rem;
+      transform: rotate(35deg);
+      animation: relay-spin 3.2s linear infinite;
+    }
+    .relay-orbit::after { inset: .7rem -.55rem; transform: rotate(-35deg); animation-direction: reverse; }
+    .relay-core {
+      width: 2.3rem;
+      height: 2.3rem;
+      border-radius: .75rem;
+      background: linear-gradient(145deg, #baf4ff, #4ba7ff);
+      box-shadow: 0 .35rem 1rem rgba(66, 181, 255, .35);
+      transform: rotate(45deg);
+    }
+    .relay-kicker { position: relative; color: #8fdcff; font-size: .68rem; font-weight: 700; letter-spacing: .22em; text-transform: uppercase; }
+    .relay-status-message { position: relative; margin-top: .65rem; color: #f2f8ff; font-size: 1.08rem; font-weight: 600; }
+    .relay-hint { position: relative; margin-top: .5rem; color: #9db3c8; font-size: .78rem; }
+    .relay-progress { position: relative; height: .25rem; margin-top: 1.5rem; overflow: hidden; border-radius: 99px; background: rgba(255, 255, 255, .1); }
+    .relay-progress span { display: block; width: 42%; height: 100%; border-radius: inherit; background: linear-gradient(90deg, #62d9ff, #8d9dff); box-shadow: 0 0 .8rem rgba(98, 217, 255, .75); animation: relay-progress 1.8s ease-in-out infinite; }
+    iframe { position: relative; z-index: 1; flex: 1; width: 100%; min-height: 0; border: 0; border-radius: .5rem; background: white; }
     body.embed main { display: block; padding: 0; }
-    body.embed #relay-status { display: none; }
     body.embed iframe { display: block; width: 100vw; height: 100vh; border-radius: 0; }
+    @keyframes relay-drift { 0%, 100% { transform: translate3d(-3%, -2%, 0) scale(.96); } 50% { transform: translate3d(3%, 2%, 0) scale(1.04); } }
+    @keyframes relay-shimmer { 0%, 35% { transform: translateX(-35%) rotate(-12deg); } 75%, 100% { transform: translateX(35%) rotate(-12deg); } }
+    @keyframes relay-pulse { 0%, 100% { transform: scale(.94); } 50% { transform: scale(1.04); } }
+    @keyframes relay-spin { to { transform: rotate(395deg); } }
+    @keyframes relay-progress { 0% { transform: translateX(-140%); } 100% { transform: translateX(340%); } }
+    @media (prefers-reduced-motion: reduce) { *, *::before, *::after { animation-duration: .01ms !important; animation-iteration-count: 1 !important; } }
   </style>
 </head>
   <body>
   <main>
-    <div id="relay-status" role="status" aria-live="polite">Starting Scramjet…</div>
+    <div id="relay-status" role="status" aria-live="polite" aria-busy="true">
+      <section class="relay-loader" aria-label="Loading Antarctic relay">
+        <div class="relay-orbit" aria-hidden="true"><div class="relay-core"></div></div>
+        <div class="relay-kicker">Antarctic relay</div>
+        <div class="relay-status-message">Starting Scramjet…</div>
+        <div class="relay-hint">Building a secure connection</div>
+        <div class="relay-progress" aria-hidden="true"><span></span></div>
+      </section>
+    </div>
     <iframe id="relay-frame" title="Scramjet relay"></iframe>
   </main>
 
