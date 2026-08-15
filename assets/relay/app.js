@@ -54,16 +54,25 @@ function publishPageMetadata() {
     const pageDocument = frame.element.contentDocument;
     if (!pageDocument) return;
 
+    // Scramjet exposes the client on the proxied document using this shared
+    // symbol. The virtual document URL is the reliable source after in-page
+    // navigation (for example, clicking a search result).
+    const scramjetClient = pageDocument[Symbol.for("scramjet client global")];
+    const targetUrl = scramjetClient?.url?.href || currentTarget;
+    if (!/^https?:\/\//i.test(targetUrl)) return;
+
+    currentTarget = targetUrl;
+
     const iconLink = pageDocument.querySelector('link[rel~="icon"], link[rel="shortcut icon"]');
     const iconHref = iconLink?.getAttribute("href");
-    const resolvedIcon = iconHref ? new URL(iconHref, currentTarget).href : "";
+    const resolvedIcon = iconHref ? new URL(iconHref, targetUrl).href : "";
     const favicon = /^(?:https?:\/\/|data:image\/)/i.test(resolvedIcon)
       ? resolvedIcon
-      : new URL("/favicon.ico", currentTarget).href;
+      : new URL("/favicon.ico", targetUrl).href;
 
     window.parent.postMessage({
       type: "antarctic:page-metadata",
-      url: currentTarget,
+      url: targetUrl,
       title: pageDocument.title?.trim() || "",
       favicon,
     }, "*");

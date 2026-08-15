@@ -790,7 +790,20 @@ window.addEventListener('message', (event) => {
   const frame = document.getElementById('game-sandbox-frame');
   const activeTab = tabState.tabs.find(tab => tab.id === tabState.activeTabId);
   if (!frame || !activeTab || event.source !== frame.contentWindow) return;
-  if (metadata.url && normalizeRemoteUrl(metadata.url) !== normalizeRemoteUrl(activeTab.url)) return;
+
+  if (metadata.url && /^https?:\/\//i.test(metadata.url)
+    && normalizeRemoteUrl(metadata.url) !== normalizeRemoteUrl(activeTab.url)) {
+    navigateTabTo(activeTab, {
+      url: metadata.url,
+      actualPath: null,
+      title: metadata.title || activeTab.title,
+      favicon: metadata.favicon || activeTab.favicon
+    });
+
+    const liveUrlInput = document.querySelector('.url-input');
+    if (liveUrlInput) liveUrlInput.value = activeTab.url;
+    updateNavigationControls();
+  }
 
   updateTabMetadata(activeTab, metadata);
 });
