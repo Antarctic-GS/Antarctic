@@ -8,8 +8,6 @@ const defaultWispUrl = isLocalNetworkHost
   ? `${isSecurePage ? "wss" : "ws"}://${isLoopbackHost ? "127.0.0.1" : hostname}:${isSecurePage ? "5002" : "5001"}/`
   : "wss://wisp.mercurywork.shop/";
 
-const form = document.querySelector("#relay-form");
-const input = document.querySelector("#relay-url");
 const frameElement = document.querySelector("#relay-frame");
 const statusElement = document.querySelector("#relay-status");
 
@@ -163,29 +161,10 @@ async function initializeRelay() {
   const initialTarget = getInitialTarget();
   if (initialTarget) {
     currentTarget = initialTarget;
-    input.value = initialTarget;
     frame.go(initialTarget);
     setStatus(`Loading · ${initialTarget}`);
   }
 }
-
-form.addEventListener("submit", (event) => {
-  event.preventDefault();
-  const target = input.value.trim();
-  if (!frame || !target) return;
-
-  try {
-    const url = new URL(target);
-    if (!/^https?:$/.test(url.protocol)) {
-      throw new Error("Only HTTP and HTTPS URLs can be proxied.");
-    }
-    currentTarget = url.href;
-    frame.go(url.href);
-    setStatus(`Loading · ${url.href}`);
-  } catch (error) {
-    setStatus(error.message, true);
-  }
-});
 
 initializeRelay().catch((error) => {
   console.error("Scramjet relay failed to initialize:", error);
