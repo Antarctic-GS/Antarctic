@@ -54,5 +54,13 @@
     "shelf": "all",
     "shelfTitle": "All Games",
     "tags": ["strategy", "casual"]
+  },
+  {
+    "title": "Terraria",
+    "thumbnail": "assets/img/08.png",
+    "url": "storage/1/08.html",
+    "shelf": "all",
+    "shelfTitle": "All Games",
+    "tags": ["action", "sandbox", "multiplayer"]
   }
 ]
