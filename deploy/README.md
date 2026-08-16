@@ -23,4 +23,5 @@ journalctl -u antarctic-repo-sync.service -n 50 --no-pager
 
 The puller uses `git pull --ff-only origin main`, so local server changes are
 never overwritten automatically; a non-fast-forward state is reported in the
-systemd journal instead.
+systemd journal instead. When a new commit is pulled, it restarts the Antarctic
+service so server-side routes such as `/api/captcha/challenge` are loaded.

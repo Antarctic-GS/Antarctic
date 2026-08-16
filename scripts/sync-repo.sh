@@ -10,4 +10,10 @@ LOCK_FILE="/run/lock/antarctic-repo-sync.lock"
 exec 9>"$LOCK_FILE"
 flock -n 9 || exit 0
 
+BEFORE_COMMIT="$(git -C "$ROOT_DIR" rev-parse HEAD)"
 GIT_TERMINAL_PROMPT=0 git -C "$ROOT_DIR" pull --ff-only --quiet "$REMOTE" "$BRANCH"
+AFTER_COMMIT="$(git -C "$ROOT_DIR" rev-parse HEAD)"
+
+if [[ "$BEFORE_COMMIT" != "$AFTER_COMMIT" ]]; then
+  systemctl try-restart antarctic.service
+fi
