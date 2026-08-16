@@ -229,11 +229,16 @@ function updateTabMetadata(tab, metadata) {
  * @param {string} [actualFilePath] - Optional underlying file system path.
  */
 function updateViewportContent(url, actualFilePath = null) {
-  const resolvedUrl = actualFilePath ? `${DEFAULT_PROTOCOL}${actualFilePath}` : url;
-  const routeKey = resolvedUrl.replace(DEFAULT_PROTOCOL, '').trim().toLowerCase();
-  const externalTarget = !actualFilePath && /^https?:\/\//i.test(String(url).trim())
-    ? String(url).trim()
+  const externalActualTarget = actualFilePath && /^https?:\/\//i.test(String(actualFilePath).trim())
+    ? String(actualFilePath).trim()
     : null;
+  const resolvedUrl = externalActualTarget
+    ? LAUNCHER_PAGE
+    : actualFilePath ? `${DEFAULT_PROTOCOL}${actualFilePath}` : url;
+  const routeKey = resolvedUrl.replace(DEFAULT_PROTOCOL, '').trim().toLowerCase();
+  const externalTarget = externalActualTarget || (!actualFilePath && /^https?:\/\//i.test(String(url).trim())
+    ? String(url).trim()
+    : null);
   const viewport = document.getElementById('viewport-content');
   if (!viewport) return;
 
@@ -644,7 +649,18 @@ function initializeAppsPortalEngine() {
           <h4 class="card-title">${app.name}</h4>
         </div>
       `;
-      card.addEventListener('click', () => navigateLookup(app.url));
+      card.addEventListener('click', () => {
+        const currentTab = tabState.tabs.find(t => t.id === tabState.activeTabId);
+        if (!currentTab) return;
+
+        navigateTabTo(currentTab, {
+          url: LAUNCHER_PAGE,
+          actualPath: app.url,
+          title: app.name,
+          favicon: app.name.charAt(0).toUpperCase()
+        });
+        renderTabs();
+      });
       appsContainer.appendChild(card);
     });
 
