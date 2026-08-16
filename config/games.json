@@ -30,5 +30,13 @@
     "shelf": "all",
     "shelfTitle": "All Games",
     "tags": ["action", "arcade", "platformer"]
+  },
+  {
+    "title": "OvO",
+    "thumbnail": "assets/img/05.png",
+    "url": "storage/1/05.html",
+    "shelf": "all",
+    "shelfTitle": "All Games",
+    "tags": ["action", "arcade", "platformer"]
   }
 ]
