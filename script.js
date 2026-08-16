@@ -6,6 +6,7 @@ const HOME_PAGE = 'antarctic://newtab';
 const LAUNCHER_PAGE = 'antarctic://launcher';
 const TAB_STORAGE_KEY = 'antarctic.tab-state.v1';
 const SETTINGS_STORAGE_KEY = 'antarctic.settings.v1';
+const ACCESS_GATE_STORAGE_KEY = 'antarctic.access-accepted.v1';
 
 function createNavigationEntry(values) {
   return {
@@ -94,10 +95,11 @@ function loadAppSettings() {
   try {
     const savedSettings = JSON.parse(localStorage.getItem(SETTINGS_STORAGE_KEY));
     return {
-      reduceMotion: savedSettings?.reduceMotion === true
+      reduceMotion: savedSettings?.reduceMotion === true,
+      relayBackend: savedSettings?.relayBackend === 'ultraviolet' ? 'ultraviolet' : 'scramjet'
     };
   } catch (error) {
-    return { reduceMotion: false };
+    return { reduceMotion: false, relayBackend: 'scramjet' };
   }
 }
 
@@ -111,6 +113,146 @@ function persistAppSettings() {
 
 function applyAppSettings() {
   document.documentElement.classList.toggle('antarctic-reduced-motion', appSettings.reduceMotion);
+}
+
+function initializeAccessGate() {
+  const gate = document.getElementById('access-gate');
+  const agreement = document.getElementById('access-gate-agreement');
+  const continueButton = document.getElementById('access-gate-continue');
+  const termsLink = document.getElementById('access-terms-link');
+  const termsModal = document.getElementById('tos-modal');
+  const termsModalContent = document.getElementById('tos-modal-content');
+  const termsModalExit = document.getElementById('tos-modal-exit');
+  if (!gate || !agreement || !continueButton) return;
+
+  const closeTermsModal = () => {
+    if (!termsModal) return;
+    termsModal.hidden = true;
+    termsModalContent.replaceChildren();
+    termsLink?.focus();
+  };
+
+  termsModalExit?.addEventListener('click', closeTermsModal);
+  termsLink?.addEventListener('click', event => {
+    event.preventDefault();
+    if (!termsModal || !termsModalContent) return;
+    termsModal.hidden = false;
+    termsModalContent.textContent = 'Loading Terms of Service…';
+    termsModalExit?.focus();
+    fetch('terms.html')
+      .then(response => {
+        if (!response.ok) throw new Error(`Terms document unavailable (${response.status})`);
+        return response.text();
+      })
+      .then(htmlContent => {
+        termsModalContent.innerHTML = htmlContent;
+        formatTermsDocument(termsModalContent);
+      })
+      .catch(error => {
+        termsModalContent.textContent = `Unable to load the Terms of Service: ${error.message}`;
+      });
+  });
+
+  let accepted = false;
+  try {
+    accepted = localStorage.getItem(ACCESS_GATE_STORAGE_KEY) === 'accepted';
+  } catch (error) {
+    // Restricted storage keeps the checkpoint visible for the current session.
+  }
+
+  if (accepted) {
+    gate.hidden = true;
+    return;
+  }
+
+  agreement.addEventListener('change', () => {
+    continueButton.disabled = !agreement.checked;
+  });
+
+  continueButton.addEventListener('click', () => {
+    if (!agreement.checked) return;
+    try {
+      localStorage.setItem(ACCESS_GATE_STORAGE_KEY, 'accepted');
+    } catch (error) {
+      // The gate can still be dismissed for this session when storage is blocked.
+    }
+    gate.hidden = true;
+    document.querySelector('.url-input')?.focus();
+  });
+}
+
+function formatTermsDocument(root) {
+  const source = root.querySelector('.terms-markdown');
+  if (!source || source.dataset.formatted === 'true') return;
+
+  const lines = source.textContent.split(/\r?\n/);
+  const fragment = document.createDocumentFragment();
+  let list = null;
+  let subsection = null;
+
+  const closeList = () => {
+    if (!list) return;
+    fragment.appendChild(list);
+    list = null;
+  };
+
+  const appendParagraph = (text, className = '') => {
+    const paragraph = document.createElement('p');
+    if (className) paragraph.className = className;
+    if (subsection) {
+      const label = document.createElement('strong');
+      label.textContent = `${subsection} `;
+      paragraph.append(label);
+      subsection = null;
+    }
+    paragraph.append(document.createTextNode(text));
+    fragment.appendChild(paragraph);
+  };
+
+  lines.forEach(rawLine => {
+    const line = rawLine.trim();
+    if (!line) {
+      closeList();
+      return;
+    }
+
+    const section = line.match(/^(\d+)\.\s+(.+)$/);
+    if (section) {
+      closeList();
+      subsection = null;
+      const heading = document.createElement('h2');
+      heading.textContent = `${section[1]}. ${section[2]}`;
+      fragment.appendChild(heading);
+      return;
+    }
+
+    const numberedParagraph = line.match(/^(\d+\.\d+)$/);
+    if (numberedParagraph) {
+      closeList();
+      subsection = numberedParagraph[1];
+      return;
+    }
+
+    if (line.startsWith('* ')) {
+      if (!list) list = document.createElement('ul');
+      const item = document.createElement('li');
+      item.textContent = line.slice(2);
+      list.appendChild(item);
+      return;
+    }
+
+    closeList();
+    const className = /^IMPORTANT:|^BY USING|^IF YOU DO NOT|^TO THE MAXIMUM|^ANTARCTIC DISCLAIMS|^WE DO NOT|^NOTHING IN|^BY USING ANTARCTIC/.test(line)
+      ? 'terms-notice'
+      : /^Email: \[YOUR EMAIL\]$/.test(line)
+        ? 'terms-caution'
+        : /^\([a-z]\)\s/.test(line) ? 'terms-lettered' : '';
+    appendParagraph(line, className);
+  });
+
+  closeList();
+  source.replaceChildren(fragment);
+  source.dataset.formatted = 'true';
 }
 
 // Central browser application session storage matrix
@@ -258,13 +400,24 @@ function setRelayFrameMode(frame, isWarmup) {
 }
 
 function createRelayWarmupFrame() {
+  if (appSettings.relayBackend === 'ultraviolet') return null;
   if (relayWarmupFrame) return relayWarmupFrame;
 
   relayWarmupFrame = document.createElement('iframe');
-  relayWarmupFrame.src = 'assets/relay/?embed=1&prewarm=1';
+  relayWarmupFrame.src = buildRelayUrl({ prewarm: true });
   setRelayFrameMode(relayWarmupFrame, true);
   document.body.appendChild(relayWarmupFrame);
   return relayWarmupFrame;
+}
+
+function buildRelayUrl(options = {}) {
+  const params = new URLSearchParams({
+    embed: '1',
+    backend: appSettings.relayBackend
+  });
+  if (options.prewarm) params.set('prewarm', '1');
+  if (options.url) params.set('url', options.url);
+  return `assets/relay/?${params.toString()}`;
 }
 
 function parkRelayWarmupFrame() {
@@ -284,8 +437,9 @@ function sendRelayTarget(target) {
   pendingRelayTarget = null;
 }
 
-function mountRelayFrame(wrapper) {
-  const frame = createRelayWarmupFrame();
+function mountRelayFrame(wrapper, relayUrl) {
+  const frame = document.createElement('iframe');
+  frame.src = relayUrl;
   setRelayFrameMode(frame, false);
   wrapper.appendChild(frame);
   return frame;
@@ -409,15 +563,36 @@ function updateViewportContent(url, actualFilePath = null) {
     return;
   }
 
+  if (routeKey === 'terms') {
+    fetch('terms.html')
+      .then(response => {
+        if (!response.ok) throw new Error(`Terms document unavailable (${response.status})`);
+        return response.text();
+      })
+      .then(htmlContent => {
+        viewport.innerHTML = htmlContent;
+        formatTermsDocument(viewport);
+      })
+      .catch(err => {
+        console.error(err);
+        viewport.innerHTML = `
+          <div style="text-align: center; padding: 60px 20px; color: #ef4444; font-family: 'Saira', sans-serif;">
+            <h2 style="font-size: 18px; margin-bottom: 8px;">Failed to load Terms of Service</h2>
+            <p style="color: #64748b; font-size: 13px; font-family: monospace;">${err.message}</p>
+          </div>
+        `;
+      });
+    return;
+  }
+
   if (externalTarget) {
-    const relayUrl = `assets/relay/?embed=1&url=${encodeURIComponent(externalTarget)}`;
+    const relayUrl = buildRelayUrl({ url: externalTarget });
     viewport.innerHTML = `
       <div style="position: relative; width: 100%; height: 100%;" id="sandbox-wrapper">
       </div>
     `;
     const wrapper = document.getElementById('sandbox-wrapper');
-    mountRelayFrame(wrapper);
-    sendRelayTarget(externalTarget);
+    mountRelayFrame(wrapper, relayUrl);
     injectLauncherOverlayDeck(relayUrl);
     return;
   }
@@ -794,8 +969,10 @@ function initializeAppsPortalEngine() {
 // =========================================================================
 function initializeSettingsPortalEngine() {
   const reduceMotion = document.getElementById('settingsReduceMotion');
+  const relayBackend = document.getElementById('settingsRelayBackend');
   const clearTabs = document.getElementById('settingsClearTabs');
   const notice = document.getElementById('settingsNotice');
+  const termsLink = document.getElementById('settingsTermsLink');
 
   if (reduceMotion) {
     reduceMotion.checked = appSettings.reduceMotion;
@@ -805,6 +982,20 @@ function initializeSettingsPortalEngine() {
       applyAppSettings();
       if (notice) notice.textContent = 'Motion preference saved.';
     });
+  }
+
+  if (relayBackend) {
+    relayBackend.value = appSettings.relayBackend;
+    relayBackend.addEventListener('change', () => {
+      appSettings.relayBackend = relayBackend.value === 'ultraviolet' ? 'ultraviolet' : 'scramjet';
+      persistAppSettings();
+      if (notice) notice.textContent = `${appSettings.relayBackend === 'ultraviolet' ? 'Ultraviolet' : 'Scramjet'} relay selected. Reloading…`;
+      window.setTimeout(() => window.location.reload(), 250);
+    });
+  }
+
+  if (termsLink) {
+    termsLink.addEventListener('click', () => navigateInline('terms'));
   }
 
   if (clearTabs) {
@@ -1122,5 +1313,6 @@ document.querySelectorAll('.grid-item').forEach(item => {
 });
 
 // Boot execution handle
+initializeAccessGate();
 createRelayWarmupFrame();
 renderTabs();

@@ -96,11 +96,49 @@
     cursor: pointer;
   }
   .settings-toggle input {
-    width: 36px;
+    width: 20px;
     height: 20px;
     margin: 0;
-    accent-color: #38bdf8;
     cursor: pointer;
+  }
+
+  .settings-select {
+    appearance: none;
+    -webkit-appearance: none;
+    min-width: 140px;
+    padding: 8px 30px 8px 10px;
+    border: 1px solid rgba(125, 211, 252, .28);
+    border-radius: 9px;
+    background: rgba(15, 23, 42, .72);
+    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 12 12' fill='none' stroke='%237dd3fc' stroke-width='1.5'%3E%3Cpath d='m2.5 4.5 3.5 3 3.5-3'/%3E%3C/svg%3E");
+    background-position: right 10px center;
+    background-repeat: no-repeat;
+    background-size: 12px;
+    color: #e0f2fe;
+    font: inherit;
+    font-size: 12px;
+    cursor: pointer;
+  }
+  .settings-select:focus-visible,
+  .settings-link:focus-visible {
+    outline: 2px solid #7dd3fc;
+    outline-offset: 3px;
+  }
+
+  .settings-link {
+    align-self: flex-start;
+    padding: 8px 11px;
+    border: 1px solid rgba(125, 211, 252, .24);
+    border-radius: 9px;
+    background: rgba(14, 116, 144, .18);
+    color: #bae6fd;
+    font: inherit;
+    font-size: 11px;
+    cursor: pointer;
+  }
+  .settings-link:hover {
+    border-color: rgba(125, 211, 252, .5);
+    background: rgba(14, 116, 144, .32);
   }
 
   .settings-danger {
@@ -152,10 +190,16 @@
   <div class="settings-grid">
     <section class="settings-card">
       <div>
-        <h2>Relay warm-up</h2>
-        <p>Scramjet starts in the background when Antarctic loads so proxy pages open faster.</p>
+        <h2>Relay backend</h2>
+        <p>Choose which browser relay handles external pages. Ultraviolet is useful as an alternate when Scramjet has trouble with a site.</p>
       </div>
-      <span class="settings-status">Enabled</span>
+      <label class="settings-toggle">
+        <span>Backend</span>
+        <select id="settingsRelayBackend" class="settings-select" aria-label="Relay backend">
+          <option value="scramjet">Scramjet</option>
+          <option value="ultraviolet">Ultraviolet</option>
+        </select>
+      </label>
     </section>
 
     <section class="settings-card">
@@ -175,6 +219,14 @@
         <p>Your open tabs and navigation history are stored locally and restored after reopening Antarctic.</p>
       </div>
       <button id="settingsClearTabs" class="settings-danger" type="button">Clear saved tabs</button>
+    </section>
+
+    <section class="settings-card">
+      <div>
+        <h2>Legal</h2>
+        <p>Review the rules that govern access to Antarctic Games and its relay services.</p>
+      </div>
+      <button id="settingsTermsLink" class="settings-link" type="button">Terms of Service</button>
     </section>
 
     <section class="settings-card">

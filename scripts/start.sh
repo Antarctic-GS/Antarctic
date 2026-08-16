@@ -8,10 +8,35 @@ WISP_BIN="$RELAY_PACKAGE_DIR/node_modules/.bin/wisp-js-server"
 WISP_HOST="127.0.0.1"
 WISP_PORT="5001"
 WISP_TLS_PORT="5002"
+SITE_PORT="3000"
 HTTPS_PORT="3443"
 CERT_DIR="$ROOT_DIR/.runtime-certs"
 CERT_FILE="$CERT_DIR/antarctic.crt"
 KEY_FILE="$CERT_DIR/antarctic.key"
+
+stop_existing_listener() {
+  local port="$1"
+  local existing_pids=""
+
+  if ! command -v lsof >/dev/null 2>&1; then
+    return
+  fi
+
+  existing_pids="$(lsof -tiTCP:"$port" -sTCP:LISTEN 2>/dev/null || true)"
+  if [[ -z "$existing_pids" ]]; then
+    return
+  fi
+
+  echo "Stopping the existing Antarctic listener on port $port..."
+  kill $existing_pids 2>/dev/null || true
+}
+
+stop_existing_antarctic() {
+  stop_existing_listener "$HTTPS_PORT"
+  stop_existing_listener "$WISP_TLS_PORT"
+  stop_existing_listener "$WISP_PORT"
+  stop_existing_listener "$SITE_PORT"
+}
 
 install_node_runtime() {
   local privilege=""
@@ -64,6 +89,8 @@ fi
 
 cd "$ROOT_DIR"
 
+stop_existing_antarctic
+
 LAN_IP="${ANTARCTIC_LAN_IP:-}"
 if [[ -z "$LAN_IP" ]] && command -v ipconfig >/dev/null 2>&1; then
   LAN_IP="$(ipconfig getifaddr en0 2>/dev/null || true)"
@@ -92,7 +119,7 @@ ANTARCTIC_WISP_PORT="$WISP_PORT" \
 ANTARCTIC_WISP_TLS_PORT="$WISP_TLS_PORT" \
 node "$ROOT_DIR/scripts/wisp-tls-proxy.js" &
 WISP_TLS_PID=$!
-npx serve . --listen "tcp://0.0.0.0:3000" --no-port-switching --no-clipboard &
+npx serve . --listen "tcp://0.0.0.0:$SITE_PORT" --no-port-switching --no-clipboard &
 SITE_PID=$!
 npx serve . \
   --listen "tcp://0.0.0.0:$HTTPS_PORT" \

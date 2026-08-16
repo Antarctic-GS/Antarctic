@@ -1,4 +1,7 @@
 const relayBase = new URL("./", document.baseURI);
+const relayBackend = new URLSearchParams(location.search).get("backend") === "ultraviolet"
+  ? "ultraviolet"
+  : "scramjet";
 const hostname = location.hostname;
 const isLoopbackHost = ["localhost", "127.0.0.1", "::1"].includes(hostname);
 const isPrivateIpv4 = /^(?:10|192\.168)\.|^172\.(?:1[6-9]|2\d|3[01])\./.test(hostname);
@@ -18,6 +21,16 @@ if (new URLSearchParams(location.search).get("embed") === "1") {
 let frame;
 let currentTarget = null;
 let pendingTarget = getInitialTarget();
+
+function loadScript(src) {
+  return new Promise((resolve, reject) => {
+    const script = document.createElement("script");
+    script.src = new URL(src, relayBase).href;
+    script.onload = resolve;
+    script.onerror = () => reject(new Error(`Failed to load relay asset: ${src}`));
+    document.head.appendChild(script);
+  });
+}
 
 function assetPath(file) {
   return new URL(`./package/dist/${file}`, relayBase).pathname;
@@ -74,11 +87,23 @@ function navigateTarget(target) {
 
   currentTarget = normalizedTarget;
   pendingTarget = currentTarget;
+  if (relayBackend === "ultraviolet") {
+    frameElement.src = ultravioletProxyUrl(currentTarget);
+    pendingTarget = null;
+    setStatus(`Loading · ${currentTarget}`);
+    return;
+  }
+
   if (!frame) return;
 
   frame.go(currentTarget);
   pendingTarget = null;
   setStatus(`Loading · ${currentTarget}`);
+}
+
+function ultravioletProxyUrl(target) {
+  const encodedTarget = window.Ultraviolet.codec.xor.encode(target);
+  return new URL(`./ultraviolet/service/${encodedTarget}`, relayBase).href;
 }
 
 window.addEventListener("message", (event) => {
@@ -90,14 +115,20 @@ function publishPageMetadata() {
   if (!frame || !currentTarget) return;
 
   try {
-    const pageDocument = frame.element.contentDocument;
+    const pageDocument = relayBackend === "ultraviolet"
+      ? frameElement.contentDocument
+      : frame.element.contentDocument;
+    const proxiedWindow = frameElement.contentWindow;
     if (!pageDocument) return;
 
     // Scramjet exposes the client on the proxied document using this shared
     // symbol. The virtual document URL is the reliable source after in-page
     // navigation (for example, clicking a search result).
     const scramjetClient = pageDocument[Symbol.for("scramjet client global")];
-    const targetUrl = scramjetClient?.url?.href || currentTarget;
+    const ultravioletClient = proxiedWindow?.__uv;
+    const targetUrl = relayBackend === "ultraviolet"
+      ? ultravioletClient?.location?.href || ultravioletClient?.meta?.url?.href || currentTarget
+      : scramjetClient?.url?.href || currentTarget;
     if (!/^https?:\/\//i.test(targetUrl)) return;
 
     currentTarget = targetUrl;
@@ -146,6 +177,45 @@ function createTransport() {
   };
 }
 
+async function initializeUltraviolet() {
+  await loadScript("./ultraviolet/dist/uv.bundle.js");
+
+  const { BareMuxConnection } = await import(
+    new URL("./ultraviolet/baremux/index.mjs", relayBase).href
+  );
+  const bareMux = new BareMuxConnection(
+    new URL("./ultraviolet/baremux/worker.js", relayBase).href
+  );
+
+  const registration = await navigator.serviceWorker.register("./ultraviolet/sw.js", {
+    scope: new URL("./ultraviolet/", relayBase).pathname,
+    type: "classic",
+    updateViaCache: "none",
+  });
+  await waitForServiceWorkerActivation(registration);
+  await bareMux.setTransport(
+    new URL("./ultraviolet/epoxy-transport.mjs", relayBase).href,
+    [getWispUrl()]
+  );
+
+  frameElement.addEventListener("load", () => {
+    window.setTimeout(() => {
+      publishPageMetadata();
+      if (currentTarget) hideLoadingScreen();
+    }, 150);
+  });
+  window.ultravioletRegistration = registration;
+  window.ultravioletBareMux = bareMux;
+  window.parent.postMessage({ type: "antarctic:relay-ready" }, "*");
+  setStatus(`Relay ready · Ultraviolet · ${getWispUrl()}`);
+
+  if (pendingTarget) {
+    const initialTarget = pendingTarget;
+    pendingTarget = null;
+    navigateTarget(initialTarget);
+  }
+}
+
 async function waitForController(registration) {
   if (navigator.serviceWorker.controller) {
     return navigator.serviceWorker.controller;
@@ -163,10 +233,36 @@ async function waitForController(registration) {
   });
 }
 
+function waitForServiceWorkerActivation(registration) {
+  const worker = registration.active || registration.waiting || registration.installing;
+  if (!worker || worker.state === "activated") return Promise.resolve();
+
+  return new Promise((resolve, reject) => {
+    const timeout = setTimeout(() => {
+      reject(new Error("The Ultraviolet service worker did not activate."));
+    }, 10000);
+
+    worker.addEventListener("statechange", () => {
+      if (worker.state !== "activated") return;
+      clearTimeout(timeout);
+      resolve();
+    });
+  });
+}
+
 async function initializeRelay() {
   if (!window.isSecureContext || !("serviceWorker" in navigator)) {
     throw new Error("Scramjet requires HTTPS or localhost and service-worker support.");
   }
+
+  if (relayBackend === "ultraviolet") {
+    await initializeUltraviolet();
+    return;
+  }
+
+  await loadScript("./package/dist/scramjet_bundled.js");
+  await loadScript("./package/dist/controller.api.js");
+  await loadScript("./package/dist/epoxy-transport.js");
 
   const transport = createTransport();
   const transportReady = transport.init();
@@ -202,7 +298,7 @@ async function initializeRelay() {
   });
   window.scramjetController = controller;
   window.parent.postMessage({ type: "antarctic:relay-ready" }, "*");
-  setStatus(`Relay ready · ${getWispUrl()}`);
+  setStatus(`Relay ready · Scramjet · ${getWispUrl()}`);
 
   if (pendingTarget) {
     const initialTarget = pendingTarget;
@@ -212,6 +308,6 @@ async function initializeRelay() {
 }
 
 initializeRelay().catch((error) => {
-  console.error("Scramjet relay failed to initialize:", error);
+  console.error(`${relayBackend} relay failed to initialize:`, error);
   setStatus(error.message, true);
 });

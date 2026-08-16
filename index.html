@@ -100,6 +100,38 @@
         </div>
           <div id="viewport-content"></div>
     </div>
+    <div id="access-gate" class="access-gate" role="dialog" aria-modal="true" aria-labelledby="access-gate-title">
+        <div class="access-gate-shell">
+            <div class="access-gate-icon" aria-hidden="true">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7">
+                    <path d="M12 3 19 6v5c0 4.7-2.9 8.1-7 10-4.1-1.9-7-5.3-7-10V6l7-3Z" />
+                    <path d="m9 12 2 2 4-4" />
+                </svg>
+            </div>
+            <div class="access-gate-eyebrow">Antarctic Games</div>
+            <h1 id="access-gate-title">Before you continue</h1>
+            <p class="access-gate-copy">Read the Terms of Service, then confirm to enter Antarctic.</p>
+            <label class="access-gate-status access-gate-agreement">
+                <input id="access-gate-agreement" type="checkbox">
+                <span>I agree to the <a id="access-terms-link" href="terms.html">Antarctic Games Terms of Service</a>.</span>
+            </label>
+            <button id="access-gate-continue" class="access-gate-continue" type="button" disabled>
+                Continue
+                <span aria-hidden="true">→</span>
+            </button>
+            <p class="access-gate-hint">Saved on this device.</p>
+            <div class="access-gate-footer">✦ Antarctic Games</div>
+        </div>
+    </div>
+    <div id="tos-modal" class="tos-modal" role="dialog" aria-modal="true" aria-labelledby="tos-modal-title" hidden>
+        <div class="tos-modal-panel">
+            <header class="tos-modal-header">
+                <button id="tos-modal-exit" class="tos-modal-exit" type="button">Exit</button>
+                <div id="tos-modal-title" class="tos-modal-brand">Antarctic</div>
+            </header>
+            <div id="tos-modal-content" class="tos-modal-content" aria-live="polite"></div>
+        </div>
+    </div>
     <script src="script.js"></script>
 </body>
 
