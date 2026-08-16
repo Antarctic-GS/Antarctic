@@ -1,13 +1,26 @@
 # Antarctic deployment
 
-The GitHub Actions workflow deploys every push to `main` over SSH. Configure
-these repository secrets:
+Deployment is server-side and does not require GitHub Actions credentials. The
+server polls the public repository every minute and runs a fast-forward-only
+pull when `main` changes.
 
-- `DEPLOY_HOST`: the server hostname or IP address
-- `DEPLOY_USER`: the SSH user
-- `DEPLOY_SSH_KEY`: the matching private SSH key
-- `DEPLOY_PORT`: optional SSH port, defaulting to `22`
+The server should have this repository checked out at `/opt/Antarctic` with a
+public HTTPS origin:
 
-The server should have this repository checked out at `/opt/Antarctic`, with
-the deploy user's public key authorized for SSH access. The deploy job pulls
-the latest `main` commit, installs the systemd unit, and restarts Antarctic.
+```bash
+cd /opt/Antarctic
+git remote set-url origin https://github.com/Antarctic-GS/Antarctic.git
+sudo bash scripts/deploy-server.sh
+```
+
+The setup command installs and enables both the Antarctic service and the
+`antarctic-repo-sync.timer`. Check the poller with:
+
+```bash
+systemctl status antarctic-repo-sync.timer
+journalctl -u antarctic-repo-sync.service -n 50 --no-pager
+```
+
+The puller uses `git pull --ff-only origin main`, so local server changes are
+never overwritten automatically; a non-fast-forward state is reported in the
+systemd journal instead.

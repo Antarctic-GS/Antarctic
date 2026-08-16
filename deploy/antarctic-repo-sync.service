@@ -1,0 +1,9 @@
+[Unit]
+Description=Pull Antarctic updates from GitHub
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=oneshot
+WorkingDirectory=/opt/Antarctic
+ExecStart=/usr/bin/env bash /opt/Antarctic/scripts/sync-repo.sh
