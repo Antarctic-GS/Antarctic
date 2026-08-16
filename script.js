@@ -5,6 +5,7 @@ const DEFAULT_PROTOCOL = 'antarctic://';
 const HOME_PAGE = 'antarctic://newtab';
 const LAUNCHER_PAGE = 'antarctic://launcher';
 const TAB_STORAGE_KEY = 'antarctic.tab-state.v1';
+const SETTINGS_STORAGE_KEY = 'antarctic.settings.v1';
 
 function createNavigationEntry(values) {
   return {
@@ -89,8 +90,33 @@ function persistTabState() {
   }
 }
 
+function loadAppSettings() {
+  try {
+    const savedSettings = JSON.parse(localStorage.getItem(SETTINGS_STORAGE_KEY));
+    return {
+      reduceMotion: savedSettings?.reduceMotion === true
+    };
+  } catch (error) {
+    return { reduceMotion: false };
+  }
+}
+
+function persistAppSettings() {
+  try {
+    localStorage.setItem(SETTINGS_STORAGE_KEY, JSON.stringify(appSettings));
+  } catch (error) {
+    // Settings can be unavailable in private or restricted browser contexts.
+  }
+}
+
+function applyAppSettings() {
+  document.documentElement.classList.toggle('antarctic-reduced-motion', appSettings.reduceMotion);
+}
+
 // Central browser application session storage matrix
 let tabState = loadPersistedTabState();
+let appSettings = loadAppSettings();
+applyAppSettings();
 let relayWarmupFrame = null;
 let relayWarmupReady = false;
 let pendingRelayTarget = null;
@@ -354,6 +380,28 @@ function updateViewportContent(url, actualFilePath = null) {
         viewport.innerHTML = `
           <div style="text-align: center; padding: 60px 20px; color: #ef4444; font-family: 'Saira', sans-serif;">
             <h2 style="font-size: 18px; margin-bottom: 8px;">Failed to process app directory</h2>
+            <p style="color: #64748b; font-size: 13px; font-family: monospace;">${err.message}</p>
+          </div>
+        `;
+      });
+    return;
+  }
+
+  if (routeKey === 'settings') {
+    fetch('settings.html')
+      .then(response => {
+        if (!response.ok) throw new Error(`Target location offline (${response.status})`);
+        return response.text();
+      })
+      .then(htmlContent => {
+        viewport.innerHTML = htmlContent;
+        initializeSettingsPortalEngine();
+      })
+      .catch(err => {
+        console.error(err);
+        viewport.innerHTML = `
+          <div style="text-align: center; padding: 60px 20px; color: #ef4444; font-family: 'Saira', sans-serif;">
+            <h2 style="font-size: 18px; margin-bottom: 8px;">Failed to load settings</h2>
             <p style="color: #64748b; font-size: 13px; font-family: monospace;">${err.message}</p>
           </div>
         `;
@@ -742,7 +790,33 @@ function initializeAppsPortalEngine() {
 }
 
 // =========================================================================
-// 7. CORE RENDERING ENGINE (DOM SYNCHRONIZATION LAYER)
+// 7. SUB-PAGE ENGINE: SETTINGS PORTAL INITIALIZER
+// =========================================================================
+function initializeSettingsPortalEngine() {
+  const reduceMotion = document.getElementById('settingsReduceMotion');
+  const clearTabs = document.getElementById('settingsClearTabs');
+  const notice = document.getElementById('settingsNotice');
+
+  if (reduceMotion) {
+    reduceMotion.checked = appSettings.reduceMotion;
+    reduceMotion.addEventListener('change', () => {
+      appSettings.reduceMotion = reduceMotion.checked;
+      persistAppSettings();
+      applyAppSettings();
+      if (notice) notice.textContent = 'Motion preference saved.';
+    });
+  }
+
+  if (clearTabs) {
+    clearTabs.addEventListener('click', () => {
+      localStorage.removeItem(TAB_STORAGE_KEY);
+      window.location.reload();
+    });
+  }
+}
+
+// =========================================================================
+// 8. CORE RENDERING ENGINE (DOM SYNCHRONIZATION LAYER)
 // =========================================================================
 function renderTabs() {
   const activeTab = tabState.tabs.find(tab => tab.id === tabState.activeTabId);
