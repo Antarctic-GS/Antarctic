@@ -342,7 +342,8 @@ select:focus-visible {
   position: relative;
   align-items: center;
   justify-content: flex-start;
-  transform: translateY(5px);
+  /* Keep the checkbox and label centered in the full widget, not just its top row. */
+  transform: translateY(11px);
 }
 
 .access-captcha-shell altcha-widget .altcha-main > div:first-child > .altcha-checkbox-wrap {
