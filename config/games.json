@@ -46,5 +46,13 @@
     "shelf": "all",
     "shelfTitle": "All Games",
     "tags": ["action", "horror", "strategy"]
+  },
+  {
+    "title": "AdVenture Capitalist!",
+    "thumbnail": "assets/img/07.png",
+    "url": "storage/1/07.html",
+    "shelf": "all",
+    "shelfTitle": "All Games",
+    "tags": ["strategy", "casual"]
   }
 ]
