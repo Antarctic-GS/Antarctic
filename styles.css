@@ -274,12 +274,44 @@ select:focus-visible {
   font-weight: 500;
 }
 
-.access-gate-agreement {
-  display: flex;
-  align-items: center;
-  flex-direction: column;
-  gap: 10px;
+.access-gate-consent {
   margin: 0 0 20px;
+}
+
+.access-gate-checkbox-pill {
+  display: flex;
+  min-height: 82px;
+  align-items: center;
+  justify-content: center;
+  border: 1px solid rgba(56, 189, 248, .4);
+  border-radius: 12px;
+  background: rgba(15, 23, 42, .72);
+  box-shadow: 0 0 0 3px rgba(14, 165, 233, .07), inset 0 1px rgba(255, 255, 255, .06);
+  cursor: pointer;
+  transition: border-color .18s ease, box-shadow .18s ease;
+}
+
+.access-gate-checkbox-pill:hover {
+  border-color: rgba(125, 211, 252, .78);
+  box-shadow: 0 0 0 4px rgba(14, 165, 233, .1), inset 0 1px rgba(255, 255, 255, .08);
+}
+
+.access-gate-checkbox-pill input {
+  width: 30px;
+  height: 30px;
+  margin: 0;
+  cursor: pointer;
+}
+
+.access-gate-checkbox-pill input::before {
+  width: 14px;
+  height: 8px;
+  border-width: 3px;
+}
+
+.access-gate-consent-copy {
+  display: block;
+  margin-top: 12px;
   color: #a7b5ca;
   font-family: var(--font-primary);
   font-size: 12px;
@@ -288,20 +320,12 @@ select:focus-visible {
   cursor: pointer;
 }
 
-.access-gate-agreement input {
-  width: 20px;
-  height: 20px;
-  margin: 0;
-  accent-color: #38bdf8;
-  cursor: pointer;
-}
-
-.access-gate-agreement a {
+.access-gate-consent-copy a {
   color: #7dd3fc;
   text-decoration: none;
 }
 
-.access-gate-agreement a:hover {
+.access-gate-consent-copy a:hover {
   text-decoration: underline;
 }
 

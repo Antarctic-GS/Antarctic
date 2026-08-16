@@ -111,10 +111,14 @@
             <div class="access-gate-eyebrow">Antarctic Games</div>
             <h1 id="access-gate-title">Before you continue</h1>
             <p class="access-gate-copy">Read the Terms of Service, then confirm to enter Antarctic.</p>
-            <label class="access-gate-status access-gate-agreement">
-                <input id="access-gate-agreement" type="checkbox">
-                <span>I agree to the <a id="access-terms-link" href="terms.html">Antarctic Games Terms of Service</a>.</span>
-            </label>
+            <div class="access-gate-consent">
+                <label class="access-gate-checkbox-pill" for="access-gate-agreement">
+                    <input id="access-gate-agreement" type="checkbox" aria-label="Accept the Antarctic Games Terms of Service">
+                </label>
+                <label class="access-gate-consent-copy" for="access-gate-agreement">
+                    I agree to the <a id="access-terms-link" href="terms.html">Antarctic Games Terms of Service</a>.
+                </label>
+            </div>
             <button id="access-gate-continue" class="access-gate-continue" type="button" disabled>
                 Continue
                 <span aria-hidden="true">→</span>
