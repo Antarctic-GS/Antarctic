@@ -215,6 +215,28 @@
 
     <section class="settings-card">
       <div>
+        <h2>Sidebar memory</h2>
+        <p>Restore the sidebar’s open or closed state when Antarctic starts.</p>
+      </div>
+      <label class="settings-toggle">
+        <span>Remember sidebar state</span>
+        <input id="settingsRestoreSidebar" type="checkbox">
+      </label>
+    </section>
+
+    <section class="settings-card">
+      <div>
+        <h2>Session restore</h2>
+        <p>Restore your tabs and navigation history the next time you open Antarctic.</p>
+      </div>
+      <label class="settings-toggle">
+        <span>Restore saved tabs</span>
+        <input id="settingsRestoreTabs" type="checkbox">
+      </label>
+    </section>
+
+    <section class="settings-card">
+      <div>
         <h2>Saved tabs</h2>
         <p>Your open tabs and navigation history are stored locally and restored after reopening Antarctic.</p>
       </div>
@@ -232,9 +254,9 @@
     <section class="settings-card">
       <div>
         <h2>Privacy</h2>
-        <p>Preferences stay in this browser. Antarctic does not send your tab settings to a separate account.</p>
+        <p>Preferences stay in this browser. Clear this app’s local storage, session storage, and browser-visible cookies here.</p>
       </div>
-      <span class="settings-status">Local only</span>
+      <button id="settingsClearData" class="settings-danger" type="button">Clear cookies &amp; local data</button>
     </section>
   </div>
 

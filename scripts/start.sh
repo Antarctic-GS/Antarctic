@@ -5,6 +5,7 @@ set -euo pipefail
 ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 RELAY_PACKAGE_DIR="$ROOT_DIR/assets/relay/package"
 WISP_BIN="$RELAY_PACKAGE_DIR/node_modules/.bin/wisp-js-server"
+ALTCHA_MODULE="$RELAY_PACKAGE_DIR/node_modules/altcha-lib/package.json"
 WISP_HOST="127.0.0.1"
 WISP_PORT="5001"
 WISP_TLS_PORT="5002"
@@ -68,7 +69,7 @@ if ! command -v node >/dev/null 2>&1 || ! command -v npx >/dev/null 2>&1 || ! co
   install_node_runtime
 fi
 
-if [[ ! -x "$WISP_BIN" ]]; then
+if [[ ! -x "$WISP_BIN" || ! -f "$ALTCHA_MODULE" ]]; then
   echo "Wisp server not found. Installing relay dependencies..."
   if command -v pnpm >/dev/null 2>&1; then
     (cd "$RELAY_PACKAGE_DIR" && pnpm install --frozen-lockfile)
@@ -82,8 +83,8 @@ if [[ ! -x "$WISP_BIN" ]]; then
   fi
 fi
 
-if [[ ! -x "$WISP_BIN" ]]; then
-  echo "Relay dependency installation completed, but Wisp is still unavailable." >&2
+if [[ ! -x "$WISP_BIN" || ! -f "$ALTCHA_MODULE" ]]; then
+  echo "Relay dependency installation completed, but the required relay/CAPTCHA dependencies are unavailable." >&2
   exit 1
 fi
 
@@ -119,14 +120,17 @@ ANTARCTIC_WISP_PORT="$WISP_PORT" \
 ANTARCTIC_WISP_TLS_PORT="$WISP_TLS_PORT" \
 node "$ROOT_DIR/scripts/wisp-tls-proxy.js" &
 WISP_TLS_PID=$!
-npx serve . --listen "tcp://0.0.0.0:$SITE_PORT" --no-port-switching --no-clipboard &
+ANTARCTIC_SITE_ROOT="$ROOT_DIR" \
+ANTARCTIC_SITE_PORT="$SITE_PORT" \
+ALTCHA_HMAC_SECRET="${ALTCHA_HMAC_SECRET:-local-development-secret-change-me}" \
+node "$ROOT_DIR/scripts/antarctic-site-server.mjs" &
 SITE_PID=$!
-npx serve . \
-  --listen "tcp://0.0.0.0:$HTTPS_PORT" \
-  --ssl-cert "$CERT_FILE" \
-  --ssl-key "$KEY_FILE" \
-  --no-port-switching \
-  --no-clipboard &
+ANTARCTIC_SITE_ROOT="$ROOT_DIR" \
+ANTARCTIC_SITE_PORT="$HTTPS_PORT" \
+ANTARCTIC_TLS_CERT="$CERT_FILE" \
+ANTARCTIC_TLS_KEY="$KEY_FILE" \
+ALTCHA_HMAC_SECRET="${ALTCHA_HMAC_SECRET:-local-development-secret-change-me}" \
+node "$ROOT_DIR/scripts/antarctic-site-server.mjs" &
 HTTPS_SITE_PID=$!
 
 cleanup() {

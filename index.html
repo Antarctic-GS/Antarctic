@@ -111,6 +111,13 @@
             <div class="access-gate-eyebrow">Antarctic Games</div>
             <h1 id="access-gate-title">Before you continue</h1>
             <p class="access-gate-copy">Read the Terms of Service, then confirm to enter Antarctic.</p>
+            <div class="access-captcha-shell">
+                <div class="access-captcha-heading">
+                    <span>CAPTCHA</span>
+                    <span>Human check</span>
+                </div>
+                <altcha-widget id="access-captcha" type="checkbox" display="standard"></altcha-widget>
+            </div>
             <div class="access-gate-consent">
                 <label class="access-gate-checkbox-pill" for="access-gate-agreement">
                     <input id="access-gate-agreement" type="checkbox" aria-label="Accept the Antarctic Games Terms of Service">
@@ -123,7 +130,6 @@
                 Continue
                 <span aria-hidden="true">→</span>
             </button>
-            <p class="access-gate-hint">Saved on this device.</p>
             <div class="access-gate-footer">✦ Antarctic Games</div>
         </div>
     </div>
@@ -136,6 +142,8 @@
             <div id="tos-modal-content" class="tos-modal-content" aria-live="polite"></div>
         </div>
     </div>
+    <script src="assets/captcha/config.js"></script>
+    <script type="module" src="assets/captcha/vendor/altcha/dist/main/altcha.min.js"></script>
     <script src="script.js"></script>
 </body>
 

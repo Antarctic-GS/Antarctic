@@ -7,6 +7,7 @@ const LAUNCHER_PAGE = 'antarctic://launcher';
 const TAB_STORAGE_KEY = 'antarctic.tab-state.v1';
 const SETTINGS_STORAGE_KEY = 'antarctic.settings.v1';
 const ACCESS_GATE_STORAGE_KEY = 'antarctic.access-accepted.v1';
+const SIDEBAR_STORAGE_KEY = 'antarctic.sidebar-state.v1';
 
 function createNavigationEntry(values) {
   return {
@@ -84,6 +85,11 @@ function loadPersistedTabState() {
 }
 
 function persistTabState() {
+  if (!appSettings.restoreTabs) {
+    localStorage.removeItem(TAB_STORAGE_KEY);
+    return;
+  }
+
   try {
     localStorage.setItem(TAB_STORAGE_KEY, JSON.stringify(tabState));
   } catch (error) {
@@ -96,10 +102,33 @@ function loadAppSettings() {
     const savedSettings = JSON.parse(localStorage.getItem(SETTINGS_STORAGE_KEY));
     return {
       reduceMotion: savedSettings?.reduceMotion === true,
-      relayBackend: savedSettings?.relayBackend === 'ultraviolet' ? 'ultraviolet' : 'scramjet'
+      relayBackend: savedSettings?.relayBackend === 'ultraviolet' ? 'ultraviolet' : 'scramjet',
+      restoreSidebarState: savedSettings?.restoreSidebarState !== false,
+      restoreTabs: savedSettings?.restoreTabs !== false
     };
   } catch (error) {
-    return { reduceMotion: false, relayBackend: 'scramjet' };
+    return {
+      reduceMotion: false,
+      relayBackend: 'scramjet',
+      restoreSidebarState: true,
+      restoreTabs: true
+    };
+  }
+}
+
+function loadPersistedSidebarState() {
+  try {
+    return localStorage.getItem(SIDEBAR_STORAGE_KEY) === 'open';
+  } catch (error) {
+    return false;
+  }
+}
+
+function persistSidebarState(isOpen) {
+  try {
+    localStorage.setItem(SIDEBAR_STORAGE_KEY, isOpen ? 'open' : 'closed');
+  } catch (error) {
+    // Sidebar state can be unavailable in private or restricted browser contexts.
   }
 }
 
@@ -123,7 +152,30 @@ function initializeAccessGate() {
   const termsModal = document.getElementById('tos-modal');
   const termsModalContent = document.getElementById('tos-modal-content');
   const termsModalExit = document.getElementById('tos-modal-exit');
+  const captchaWidget = document.getElementById('access-captcha');
   if (!gate || !agreement || !continueButton) return;
+
+  const captchaChallenge = window.ANTARCTIC_CAPTCHA_CONFIG?.challenge;
+  const captchaVerify = window.ANTARCTIC_CAPTCHA_CONFIG?.verify;
+  if (captchaWidget && captchaChallenge) {
+    captchaWidget.setAttribute('challenge', captchaChallenge);
+  }
+  if (captchaWidget && captchaVerify) {
+    captchaWidget.setAttribute('verifyurl', captchaVerify);
+  }
+
+  const captchaIsVerified = () => {
+    if (!captchaWidget || !captchaChallenge) return true;
+    return captchaWidget.getState?.() === 'verified';
+  };
+
+  const updateContinueState = () => {
+    continueButton.disabled = !(agreement.checked && captchaIsVerified());
+  };
+
+  captchaWidget?.addEventListener('statechange', () => {
+    updateContinueState();
+  });
 
   const closeTermsModal = () => {
     if (!termsModal) return;
@@ -166,19 +218,28 @@ function initializeAccessGate() {
   }
 
   agreement.addEventListener('change', () => {
-    continueButton.disabled = !agreement.checked;
+    updateContinueState();
   });
 
   continueButton.addEventListener('click', () => {
-    if (!agreement.checked) return;
+    if (!agreement.checked || !captchaIsVerified()) return;
     try {
       localStorage.setItem(ACCESS_GATE_STORAGE_KEY, 'accepted');
     } catch (error) {
       // The gate can still be dismissed for this session when storage is blocked.
     }
-    gate.hidden = true;
-    document.querySelector('.url-input')?.focus();
+    continueButton.disabled = true;
+    gate.setAttribute('aria-hidden', 'true');
+    gate.classList.add('is-exiting');
+    window.setTimeout(() => {
+      gate.hidden = true;
+      gate.classList.remove('is-exiting');
+      gate.removeAttribute('aria-hidden');
+      document.querySelector('.url-input')?.focus();
+    }, 460);
   });
+
+  updateContinueState();
 }
 
 function formatTermsDocument(root) {
@@ -256,8 +317,8 @@ function formatTermsDocument(root) {
 }
 
 // Central browser application session storage matrix
-let tabState = loadPersistedTabState();
 let appSettings = loadAppSettings();
+let tabState = appSettings.restoreTabs ? loadPersistedTabState() : createDefaultTabState();
 applyAppSettings();
 let relayWarmupFrame = null;
 let relayWarmupReady = false;
@@ -275,6 +336,20 @@ const sidebarTop = document.querySelector('.sidebar-top');
 const backButton = document.querySelector('.backbtn');
 const forwardButton = document.querySelector('.forwardbtn');
 const reloadButton = document.querySelector('.reloadbtn');
+
+function applySidebarState(isOpen, shouldPersist = true) {
+  if (!menuBtn || !sidebar || !mainContent) return;
+
+  menuBtn.setAttribute('data-state', isOpen ? 'open' : 'closed');
+  menuBtn.setAttribute('aria-expanded', String(isOpen));
+  menuBtn.setAttribute('aria-label', isOpen ? 'Close sidebar' : 'Open sidebar');
+  sidebar.style.width = isOpen ? '260px' : '0';
+  mainContent.style.marginLeft = isOpen ? '260px' : '0';
+
+  if (shouldPersist) persistSidebarState(isOpen);
+}
+
+applySidebarState(appSettings.restoreSidebarState && loadPersistedSidebarState(), false);
 
 // Vector path symbols for interface transitions
 const hamburgerSVG = `
@@ -704,6 +779,13 @@ function injectLauncherOverlayDeck(targetFile) {
 // =========================================================================
 // 5. SUB-PAGE ENGINE: DYNAMIC GAMES PORTAL INITIALIZER
 // =========================================================================
+function compareDirectoryNames(left, right) {
+  return String(left).localeCompare(String(right), undefined, {
+    numeric: true,
+    sensitivity: 'base'
+  });
+}
+
 /**
  * Binds lookups and search event loops natively to elements injected inside games.html
  */
@@ -763,7 +845,7 @@ function initializeGamesPortalEngine() {
           : [currentCategory, ...selectedTags];
         const matchesCategory = requiredTags.every(tag => game.tags && game.tags.includes(tag));
         return matchesSearch && matchesCategory;
-      });
+      }).sort((left, right) => compareDirectoryNames(left.title, right.title));
 
       if (matchingGames.length === 0) return;
 
@@ -940,7 +1022,8 @@ function initializeAppsPortalEngine() {
       return response.json();
     })
     .then(data => {
-      appsData = Array.isArray(data) ? data : [];
+      appsData = (Array.isArray(data) ? data : [])
+        .sort((left, right) => compareDirectoryNames(left.name, right.name));
       renderApps();
     })
     .catch(err => {
@@ -970,7 +1053,10 @@ function initializeAppsPortalEngine() {
 function initializeSettingsPortalEngine() {
   const reduceMotion = document.getElementById('settingsReduceMotion');
   const relayBackend = document.getElementById('settingsRelayBackend');
+  const restoreSidebar = document.getElementById('settingsRestoreSidebar');
+  const restoreTabs = document.getElementById('settingsRestoreTabs');
   const clearTabs = document.getElementById('settingsClearTabs');
+  const clearData = document.getElementById('settingsClearData');
   const notice = document.getElementById('settingsNotice');
   const termsLink = document.getElementById('settingsTermsLink');
 
@@ -994,6 +1080,30 @@ function initializeSettingsPortalEngine() {
     });
   }
 
+  if (restoreSidebar) {
+    restoreSidebar.checked = appSettings.restoreSidebarState;
+    restoreSidebar.addEventListener('change', () => {
+      appSettings.restoreSidebarState = restoreSidebar.checked;
+      persistAppSettings();
+      if (restoreSidebar.checked) {
+        applySidebarState(loadPersistedSidebarState(), false);
+      } else {
+        applySidebarState(false, false);
+      }
+      if (notice) notice.textContent = 'Sidebar startup preference saved.';
+    });
+  }
+
+  if (restoreTabs) {
+    restoreTabs.checked = appSettings.restoreTabs;
+    restoreTabs.addEventListener('change', () => {
+      appSettings.restoreTabs = restoreTabs.checked;
+      if (!restoreTabs.checked) localStorage.removeItem(TAB_STORAGE_KEY);
+      persistAppSettings();
+      if (notice) notice.textContent = `${restoreTabs.checked ? 'Saved tabs will' : 'Saved tabs will not'} be restored after reload.`;
+    });
+  }
+
   if (termsLink) {
     termsLink.addEventListener('click', () => navigateInline('terms'));
   }
@@ -1001,6 +1111,29 @@ function initializeSettingsPortalEngine() {
   if (clearTabs) {
     clearTabs.addEventListener('click', () => {
       localStorage.removeItem(TAB_STORAGE_KEY);
+      window.location.reload();
+    });
+  }
+
+  if (clearData) {
+    clearData.addEventListener('click', () => {
+      const confirmed = window.confirm('Clear Antarctic cookies and local data? This will reset saved tabs, settings, and the access acknowledgment.');
+      if (!confirmed) return;
+
+      try {
+        localStorage.clear();
+        sessionStorage.clear();
+      } catch (error) {
+        // Restricted storage may prevent one or both stores from being cleared.
+      }
+
+      document.cookie.split(';').forEach(cookie => {
+        const separator = cookie.indexOf('=');
+        const name = (separator === -1 ? cookie : cookie.slice(0, separator)).trim();
+        if (!name) return;
+        document.cookie = `${name}=; expires=Thu, 01 Jan 1970 00:00:00 GMT; max-age=0; path=/`;
+      });
+
       window.location.reload();
     });
   }
@@ -1242,17 +1375,7 @@ window.addEventListener('message', (event) => {
 // =========================================================================
 menuBtn.addEventListener('click', function() {
   const currentState = menuBtn.getAttribute('data-state');
-  if (currentState === 'closed') {
-    menuIcon.innerHTML = closeSVG;
-    menuBtn.setAttribute('data-state', 'open');
-    sidebar.style.width = '260px';
-    mainContent.style.marginLeft = '260px';
-  } else {
-    menuIcon.innerHTML = hamburgerSVG;
-    menuBtn.setAttribute('data-state', 'closed');
-    sidebar.style.width = '0';
-    mainContent.style.marginLeft = '0';
-  }
+  applySidebarState(currentState !== 'open');
 });
 
 if (backButton) {

@@ -187,6 +187,43 @@ select:focus-visible {
   -webkit-backdrop-filter: blur(18px) saturate(120%);
 }
 
+.access-gate.is-exiting {
+  animation: access-gate-exit .46s cubic-bezier(.22, 1, .36, 1) forwards;
+  pointer-events: none;
+}
+
+@keyframes access-gate-exit {
+  0% {
+    opacity: 1;
+    transform: scale(1);
+    filter: blur(0);
+  }
+
+  55% {
+    opacity: 1;
+    transform: scale(1.015);
+    filter: blur(0);
+  }
+
+  100% {
+    opacity: 0;
+    transform: scale(1.045);
+    filter: blur(8px);
+  }
+}
+
+.antarctic-reduced-motion .access-gate.is-exiting {
+  animation: none;
+  opacity: 0;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .access-gate.is-exiting {
+    animation: none;
+    opacity: 0;
+  }
+}
+
 .access-gate-shell {
   width: min(100%, 430px);
   padding: 30px 30px 24px;
@@ -241,6 +278,83 @@ select:focus-visible {
   line-height: 1.6;
 }
 
+.access-captcha-shell {
+  margin: 0 0 18px;
+  padding: 0;
+}
+
+.access-captcha-heading {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin: 0 2px 9px;
+  color: #7dd3fc;
+  font-family: var(--font-primary);
+  font-size: 9px;
+  font-weight: 700;
+  letter-spacing: 1.4px;
+  text-transform: uppercase;
+}
+
+.access-captcha-heading span:last-child {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  color: #91a4bd;
+  font-weight: 500;
+  letter-spacing: .4px;
+}
+
+.access-captcha-heading span:last-child::before {
+  width: 5px;
+  height: 5px;
+  border: 1px solid #38bdf8;
+  border-radius: 50%;
+  background: rgba(56, 189, 248, .25);
+  box-shadow: 0 0 7px rgba(56, 189, 248, .6);
+  content: '';
+}
+
+.access-captcha-shell altcha-widget {
+  --altcha-border-color: rgba(125, 211, 252, .24);
+  --altcha-border-radius: 11px;
+  --altcha-border-width: 1px;
+  --altcha-color-base: #0c1a2d;
+  --altcha-color-base-content: #e0f2fe;
+  --altcha-color-neutral: #162b45;
+  --altcha-color-neutral-content: #a7b8cc;
+  --altcha-color-primary: #38bdf8;
+  --altcha-color-primary-content: #061525;
+  --altcha-color-success: #34d399;
+  --altcha-color-success-content: #06251d;
+  --altcha-input-background-color: #0a172a;
+  --altcha-input-color: #a7b8cc;
+  --altcha-max-width: 100%;
+  --altcha-padding: 12px 13px;
+  --altcha-shadow: none;
+  color-scheme: dark;
+  display: block;
+  font-family: var(--font-primary);
+  min-height: 68px;
+}
+
+.access-captcha-shell altcha-widget .altcha-main > div:first-child {
+  position: relative;
+  align-items: center;
+  justify-content: flex-start;
+  transform: translateY(5px);
+}
+
+.access-captcha-shell altcha-widget .altcha-main > div:first-child > .altcha-checkbox-wrap {
+  flex: 1 1 auto;
+  justify-content: flex-start;
+}
+
+.access-captcha-shell altcha-widget .altcha-main > div:first-child > div:has(.altcha-logo) {
+  position: absolute;
+  right: 0;
+}
+
 .access-gate-status {
   display: flex;
   align-items: center;
@@ -275,48 +389,50 @@ select:focus-visible {
 }
 
 .access-gate-consent {
+  display: flex;
+  align-items: center;
+  gap: 12px;
   margin: 0 0 20px;
+  min-height: 68px;
+  box-sizing: border-box;
+  padding: 10px 13px;
+  border: 1px solid rgba(56, 189, 248, .24);
+  border-radius: 12px;
+  background: linear-gradient(145deg, rgba(20, 43, 70, .68), rgba(8, 18, 37, .76));
+  box-shadow: 0 8px 20px rgba(2, 6, 23, .16), inset 0 1px rgba(255, 255, 255, .05);
 }
 
 .access-gate-checkbox-pill {
   display: flex;
-  min-height: 82px;
+  width: 30px;
+  height: 30px;
+  flex: 0 0 auto;
   align-items: center;
   justify-content: center;
-  border: 1px solid rgba(56, 189, 248, .4);
-  border-radius: 12px;
-  background: rgba(15, 23, 42, .72);
-  box-shadow: 0 0 0 3px rgba(14, 165, 233, .07), inset 0 1px rgba(255, 255, 255, .06);
   cursor: pointer;
-  transition: border-color .18s ease, box-shadow .18s ease;
-}
-
-.access-gate-checkbox-pill:hover {
-  border-color: rgba(125, 211, 252, .78);
-  box-shadow: 0 0 0 4px rgba(14, 165, 233, .1), inset 0 1px rgba(255, 255, 255, .08);
 }
 
 .access-gate-checkbox-pill input {
-  width: 30px;
-  height: 30px;
+  width: 24px;
+  height: 24px;
   margin: 0;
   cursor: pointer;
 }
 
 .access-gate-checkbox-pill input::before {
-  width: 14px;
-  height: 8px;
-  border-width: 3px;
+  width: 10px;
+  height: 6px;
+  border-width: 2px;
 }
 
 .access-gate-consent-copy {
-  display: block;
-  margin-top: 12px;
+  flex: 1;
+  margin: 0;
   color: #a7b5ca;
   font-family: var(--font-primary);
   font-size: 12px;
   line-height: 1.5;
-  text-align: center;
+  text-align: left;
   cursor: pointer;
 }
 
