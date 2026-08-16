@@ -9,15 +9,6 @@
     "accent": "#79c142"
   },
   {
-    "name": "Poki",
-    "url": "https://poki.com/",
-    "category": "Gaming",
-    "description": "Quick games for every kind of break.",
-    "icon": "P",
-    "thumbnail": "assets/img/apps/03.png",
-    "accent": "#ff6b5f"
-  },
-  {
     "name": "GeForce NOW",
     "url": "https://play.geforcenow.com/",
     "category": "Gaming",
