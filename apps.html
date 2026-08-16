@@ -108,17 +108,47 @@
   }
 
   .app-arcade-card {
+    position: relative;
     min-height: 0;
     aspect-ratio: 16 / 10;
     padding: 0;
     border-radius: 12px;
     background-color: rgba(15, 23, 42, .72);
+    isolation: isolate;
   }
 
-  .app-arcade-card .card-details-overlay { height: 68%; padding: 12px; }
-  .app-arcade-card .card-title { font-size: 13px; }
-  .app-card-tag { background: rgba(8, 15, 31, .62); color: #bae6fd; border: 1px solid rgba(186, 230, 253, .24); }
-  .app-card-description { margin-top: 4px; color: rgba(226, 232, 240, .72); font-size: 10px; line-height: 1.35; }
+  /* App artwork comes from different sources, so give every card the same
+     readable glass/vignette treatment instead of letting bright thumbnails
+     overpower the title and description. */
+  .app-arcade-card::before {
+    content: '';
+    position: absolute;
+    inset: 0;
+    z-index: 0;
+    pointer-events: none;
+    background: linear-gradient(135deg, rgba(3, 7, 18, .34), rgba(3, 7, 18, .12) 48%, rgba(3, 7, 18, .72));
+  }
+
+  .app-arcade-card::after {
+    content: '';
+    position: absolute;
+    inset: 0;
+    z-index: 0;
+    pointer-events: none;
+    background: linear-gradient(to bottom, rgba(8, 15, 31, .12), transparent 42%, rgba(3, 7, 18, .95) 100%);
+  }
+
+  .app-arcade-card .card-details-overlay {
+    z-index: 2;
+    height: 72%;
+    padding: 12px;
+    background: linear-gradient(to top, rgba(3, 7, 18, .98) 0%, rgba(3, 7, 18, .86) 52%, rgba(3, 7, 18, 0) 100%);
+  }
+
+  .app-arcade-card .card-tag { z-index: 3; }
+  .app-arcade-card .card-title { font-size: 13px; text-shadow: 0 1px 4px rgba(0, 0, 0, .75); }
+  .app-card-tag { background: rgba(8, 15, 31, .78); color: #bae6fd; border: 1px solid rgba(186, 230, 253, .3); }
+  .app-card-description { margin-top: 4px; color: #dbeafe; font-size: 10px; line-height: 1.35; text-shadow: 0 1px 4px rgba(0, 0, 0, .75); }
 
   .apps-empty { grid-column: 1 / -1; padding: 54px 20px; color: #94a3b8; font-size: 13px; text-align: center; }
   .apps-error { color: #fca5a5; }
