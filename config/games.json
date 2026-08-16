@@ -38,5 +38,13 @@
     "shelf": "all",
     "shelfTitle": "All Games",
     "tags": ["action", "arcade", "platformer"]
+  },
+  {
+    "title": "Five Nights at Epstein's",
+    "thumbnail": "assets/img/06.png",
+    "url": "storage/1/06.html",
+    "shelf": "all",
+    "shelfTitle": "All Games",
+    "tags": ["action", "strategy", "casual"]
   }
 ]
