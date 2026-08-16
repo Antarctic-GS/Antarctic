@@ -1,0 +1,82 @@
+[
+  {
+    "name": "Xbox Cloud Gaming",
+    "url": "https://www.xbox.com/play",
+    "category": "Gaming",
+    "description": "Play Game Pass titles from the cloud.",
+    "icon": "X",
+    "accent": "#79c142"
+  },
+  {
+    "name": "Poki",
+    "url": "https://poki.com/",
+    "category": "Gaming",
+    "description": "Quick games for every kind of break.",
+    "icon": "P",
+    "accent": "#ff6b5f"
+  },
+  {
+    "name": "GeForce NOW",
+    "url": "https://play.geforcenow.com/",
+    "category": "Gaming",
+    "description": "Stream your PC game library anywhere.",
+    "icon": "G",
+    "accent": "#76b900"
+  },
+  {
+    "name": "Reddit",
+    "url": "https://www.reddit.com/",
+    "category": "Social",
+    "description": "Find communities for almost anything.",
+    "icon": "r/",
+    "accent": "#ff4500"
+  },
+  {
+    "name": "Discord",
+    "url": "https://discord.com/app",
+    "category": "Social",
+    "description": "Hang out with your communities.",
+    "icon": "D",
+    "accent": "#5865f2"
+  },
+  {
+    "name": "YouTube",
+    "url": "https://www.youtube.com/",
+    "category": "Media",
+    "description": "Watch, discover, and share videos.",
+    "icon": "▶",
+    "accent": "#ff0033"
+  },
+  {
+    "name": "Twitch",
+    "url": "https://www.twitch.tv/",
+    "category": "Media",
+    "description": "Live streams for games and more.",
+    "icon": "T",
+    "accent": "#9146ff"
+  },
+  {
+    "name": "Spotify",
+    "url": "https://open.spotify.com/",
+    "category": "Media",
+    "description": "Music, podcasts, and new discoveries.",
+    "icon": "S",
+    "accent": "#1ed760"
+  },
+  {
+    "name": "Google Docs",
+    "url": "https://docs.google.com/",
+    "category": "Productivity",
+    "description": "Write and collaborate in the cloud.",
+    "icon": "D",
+    "accent": "#4285f4"
+  },
+  {
+    "name": "GitHub",
+    "url": "https://github.com/",
+    "category": "Productivity",
+    "description": "Build, share, and explore software.",
+    "icon": "GH",
+    "accent": "#c084fc"
+  }
+]

@@ -286,6 +286,28 @@ function updateViewportContent(url, actualFilePath = null) {
     return;
   }
 
+  if (routeKey === 'apps') {
+    fetch('apps.html')
+      .then(response => {
+        if (!response.ok) throw new Error(`Target location offline (${response.status})`);
+        return response.text();
+      })
+      .then(htmlContent => {
+        viewport.innerHTML = htmlContent;
+        initializeAppsPortalEngine();
+      })
+      .catch(err => {
+        console.error(err);
+        viewport.innerHTML = `
+          <div style="text-align: center; padding: 60px 20px; color: #ef4444; font-family: 'Saira', sans-serif;">
+            <h2 style="font-size: 18px; margin-bottom: 8px;">Failed to process app directory</h2>
+            <p style="color: #64748b; font-size: 13px; font-family: monospace;">${err.message}</p>
+          </div>
+        `;
+      });
+    return;
+  }
+
   if (externalTarget) {
     const relayUrl = `assets/relay/?embed=1&url=${encodeURIComponent(externalTarget)}`;
     viewport.innerHTML = `
@@ -587,7 +609,86 @@ function initializeGamesPortalEngine() {
 }
 
 // =========================================================================
-// 6. CORE RENDERING ENGINE (DOM SYNCHRONIZATION LAYER)
+// 6. SUB-PAGE ENGINE: APPS DIRECTORY INITIALIZER
+// =========================================================================
+function initializeAppsPortalEngine() {
+  const appsContainer = document.getElementById('appsContainer');
+  const search = document.getElementById('appsSearch');
+  const categoryBar = document.getElementById('appsCategories');
+
+  if (!appsContainer) return;
+
+  let appsData = [];
+  let currentCategory = 'all';
+  let searchQuery = '';
+
+  function renderApps() {
+    appsContainer.innerHTML = '';
+
+    const matchingApps = appsData.filter(app => {
+      const haystack = `${app.name} ${app.description} ${app.category}`.toLowerCase();
+      return (currentCategory === 'all' || app.category.toLowerCase() === currentCategory)
+        && haystack.includes(searchQuery);
+    });
+
+    matchingApps.forEach(app => {
+      const card = document.createElement('button');
+      card.type = 'button';
+      card.className = 'app-card';
+      card.style.setProperty('--app-accent', app.accent || '#60a5fa');
+      card.dataset.appUrl = app.url;
+      card.innerHTML = `
+        <span class="app-card-topline">
+          <span class="app-icon" aria-hidden="true"></span>
+          <span class="app-arrow" aria-hidden="true">↗</span>
+        </span>
+        <span class="app-card-category">${app.category}</span>
+        <span class="app-card-name">${app.name}</span>
+        <span class="app-card-description">${app.description}</span>
+      `;
+      const icon = card.querySelector('.app-icon');
+      icon.textContent = app.icon || app.name.charAt(0).toUpperCase();
+      card.addEventListener('click', () => navigateLookup(app.url));
+      appsContainer.appendChild(card);
+    });
+
+    if (matchingApps.length === 0) {
+      appsContainer.innerHTML = '<div class="apps-empty">No apps match that search.</div>';
+    }
+  }
+
+  fetch('config/apps.json')
+    .then(response => {
+      if (!response.ok) throw new Error('App directory could not be read.');
+      return response.json();
+    })
+    .then(data => {
+      appsData = Array.isArray(data) ? data : [];
+      renderApps();
+    })
+    .catch(err => {
+      appsContainer.innerHTML = `<div class="apps-empty apps-error">Failed to sync app directory: ${err.message}</div>`;
+    });
+
+  search?.addEventListener('input', () => {
+    searchQuery = search.value.toLowerCase().trim();
+    renderApps();
+  });
+
+  categoryBar?.addEventListener('click', event => {
+    const pill = event.target.closest('[data-app-category]');
+    if (!pill) return;
+
+    currentCategory = pill.dataset.appCategory;
+    categoryBar.querySelectorAll('[data-app-category]').forEach(item => {
+      item.classList.toggle('active', item === pill);
+    });
+    renderApps();
+  });
+}
+
+// =========================================================================
+// 7. CORE RENDERING ENGINE (DOM SYNCHRONIZATION LAYER)
 // =========================================================================
 function renderTabs() {
   const activeTab = tabState.tabs.find(tab => tab.id === tabState.activeTabId);
