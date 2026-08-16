@@ -139,16 +139,17 @@ async function initializeRelay() {
     throw new Error("Scramjet requires HTTPS or localhost and service-worker support.");
   }
 
+  const transport = createTransport();
+  const transportReady = transport.init();
+
   const registration = await navigator.serviceWorker.register("./sw.js", {
     scope: "./",
     type: "classic",
-    updateViaCache: "none",
+    updateViaCache: "imports",
   });
   await navigator.serviceWorker.ready;
   const serviceWorker = await waitForController(registration);
-
-  const transport = createTransport();
-  await transport.init();
+  await transportReady;
 
   const { Controller } = window.$scramjetController;
   const controller = new Controller({
