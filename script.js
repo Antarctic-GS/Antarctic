@@ -642,7 +642,6 @@ function initializeAppsPortalEngine() {
         <div class="card-tag app-card-tag">${app.category}</div>
         <div class="card-details-overlay">
           <h4 class="card-title">${app.name}</h4>
-          <p class="app-card-description">${app.description}</p>
         </div>
       `;
       card.addEventListener('click', () => navigateLookup(app.url));
