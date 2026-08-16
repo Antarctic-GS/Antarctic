@@ -632,22 +632,19 @@ function initializeAppsPortalEngine() {
     });
 
     matchingApps.forEach(app => {
-      const card = document.createElement('button');
-      card.type = 'button';
-      card.className = 'app-card';
-      card.style.setProperty('--app-accent', app.accent || '#60a5fa');
+      const card = document.createElement('div');
+      card.className = 'arcade-card app-arcade-card';
       card.dataset.appUrl = app.url;
+      card.style.backgroundImage = app.thumbnail
+        ? `url('${app.thumbnail}')`
+        : `linear-gradient(135deg, ${app.accent || '#60a5fa'} 0%, #0f172a 100%)`;
       card.innerHTML = `
-        <span class="app-card-topline">
-          <span class="app-icon" aria-hidden="true"></span>
-          <span class="app-arrow" aria-hidden="true">↗</span>
-        </span>
-        <span class="app-card-category">${app.category}</span>
-        <span class="app-card-name">${app.name}</span>
-        <span class="app-card-description">${app.description}</span>
+        <div class="card-tag app-card-tag">${app.category}</div>
+        <div class="card-details-overlay">
+          <h4 class="card-title">${app.name}</h4>
+          <p class="app-card-description">${app.description}</p>
+        </div>
       `;
-      const icon = card.querySelector('.app-icon');
-      icon.textContent = app.icon || app.name.charAt(0).toUpperCase();
       card.addEventListener('click', () => navigateLookup(app.url));
       appsContainer.appendChild(card);
     });

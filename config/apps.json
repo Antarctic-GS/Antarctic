@@ -5,6 +5,7 @@
     "category": "Gaming",
     "description": "Play Game Pass titles from the cloud.",
     "icon": "X",
+    "thumbnail": "assets/img/apps/01.png",
     "accent": "#79c142"
   },
   {
@@ -13,6 +14,7 @@
     "category": "Gaming",
     "description": "Quick games for every kind of break.",
     "icon": "P",
+    "thumbnail": "assets/img/apps/03.png",
     "accent": "#ff6b5f"
   },
   {
@@ -21,6 +23,7 @@
     "category": "Gaming",
     "description": "Stream your PC game library anywhere.",
     "icon": "G",
+    "thumbnail": "assets/img/apps/02.png",
     "accent": "#76b900"
   },
   {
@@ -29,6 +32,7 @@
     "category": "Social",
     "description": "Find communities for almost anything.",
     "icon": "r/",
+    "thumbnail": "assets/img/apps/04.png",
     "accent": "#ff4500"
   },
   {
@@ -37,6 +41,7 @@
     "category": "Social",
     "description": "Hang out with your communities.",
     "icon": "D",
+    "thumbnail": "assets/img/apps/05.png",
     "accent": "#5865f2"
   },
   {

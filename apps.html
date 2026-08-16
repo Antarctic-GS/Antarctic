@@ -101,72 +101,24 @@
 
   .apps-card-grid {
     display: grid;
-    grid-template-columns: repeat(auto-fill, minmax(215px, 1fr));
-    gap: 14px;
+    grid-template-columns: repeat(auto-fill, minmax(190px, 1fr));
+    gap: 16px;
     max-width: 1120px;
     margin: 0 auto;
   }
 
-  .app-card {
-    position: relative;
-    min-height: 178px;
-    padding: 18px;
-    overflow: hidden;
-    border: 1px solid rgba(255, 255, 255, .09);
-    border-radius: 17px;
-    background: linear-gradient(145deg, rgba(30, 41, 59, .68), rgba(15, 23, 42, .48));
-    box-shadow: 0 12px 30px rgba(0, 0, 0, .2), inset 0 1px rgba(255, 255, 255, .07);
-    color: inherit;
-    cursor: pointer;
-    font: inherit;
-    text-align: left;
-    transition: transform .22s ease, border-color .22s ease, box-shadow .22s ease;
+  .app-arcade-card {
+    min-height: 0;
+    aspect-ratio: 16 / 10;
+    padding: 0;
+    border-radius: 12px;
+    background-color: rgba(15, 23, 42, .72);
   }
 
-  .app-card::after {
-    position: absolute;
-    right: -35px;
-    bottom: -55px;
-    width: 145px;
-    height: 145px;
-    border-radius: 50%;
-    background: var(--app-accent);
-    content: '';
-    opacity: .12;
-    filter: blur(22px);
-    transition: opacity .22s ease, transform .22s ease;
-  }
-
-  .app-card:hover {
-    border-color: color-mix(in srgb, var(--app-accent) 58%, white 12%);
-    box-shadow: 0 18px 38px rgba(0, 0, 0, .3), 0 0 26px color-mix(in srgb, var(--app-accent) 18%, transparent);
-    transform: translateY(-4px);
-  }
-
-  .app-card:hover::after { opacity: .24; transform: scale(1.2); }
-
-  .app-card-topline { position: relative; z-index: 1; display: flex; align-items: center; justify-content: space-between; }
-
-  .app-icon {
-    display: grid;
-    width: 44px;
-    height: 44px;
-    place-items: center;
-    border: 1px solid color-mix(in srgb, var(--app-accent) 58%, white 12%);
-    border-radius: 13px;
-    background: linear-gradient(145deg, color-mix(in srgb, var(--app-accent) 52%, white 8%), color-mix(in srgb, var(--app-accent) 28%, #0f172a 72%));
-    box-shadow: 0 8px 18px color-mix(in srgb, var(--app-accent) 20%, transparent);
-    color: #fff;
-    font-family: var(--font-primary);
-    font-size: 16px;
-    font-weight: 800;
-  }
-
-  .app-arrow { color: #64748b; font-size: 20px; transition: color .2s ease, transform .2s ease; }
-  .app-card:hover .app-arrow { color: #e0f2fe; transform: translate(2px, -2px); }
-  .app-card-category { position: relative; z-index: 1; display: block; margin-top: 18px; color: var(--app-accent); font-size: 10px; font-weight: 700; letter-spacing: 1.2px; text-transform: uppercase; }
-  .app-card-name { position: relative; z-index: 1; display: block; margin-top: 5px; color: #f8fafc; font-size: 16px; font-weight: 650; }
-  .app-card-description { position: relative; z-index: 1; display: block; margin-top: 8px; color: #94a3b8; font-size: 11px; line-height: 1.5; }
+  .app-arcade-card .card-details-overlay { height: 68%; padding: 12px; }
+  .app-arcade-card .card-title { font-size: 13px; }
+  .app-card-tag { background: rgba(8, 15, 31, .62); color: #bae6fd; border: 1px solid rgba(186, 230, 253, .24); }
+  .app-card-description { margin-top: 4px; color: rgba(226, 232, 240, .72); font-size: 10px; line-height: 1.35; }
 
   .apps-empty { grid-column: 1 / -1; padding: 54px 20px; color: #94a3b8; font-size: 13px; text-align: center; }
   .apps-error { color: #fca5a5; }
