@@ -7,3 +7,5 @@ The page registers the scoped `sw.js` service worker, loads the matching Scramje
 Service workers require HTTPS in production (localhost is allowed for local testing). The controller and transport bundles are vendored beside the existing Scramjet package so the relay does not depend on a build step or CDN at runtime.
 
 For an iframe-ready relay view, pass `embed=1&url=<encoded-http-url>`; Antarctic's search bar uses this mode for external lookups.
+
+The bundled Scramjet controller preserves proxied site state across reloads. Cookies are persisted in the controller's IndexedDB store, while proxied `localStorage` and `sessionStorage` values are namespaced by remote host in the relay origin. Do not clear the relay origin's site data if you want those sessions and preferences to remain available.

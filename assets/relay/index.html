@@ -20,6 +20,8 @@
         radial-gradient(circle at 50% 42%, rgba(38, 176, 255, .16), transparent 27%),
         radial-gradient(circle at 18% 80%, rgba(24, 217, 190, .12), transparent 30%),
         linear-gradient(135deg, #07172a 0%, #090e1c 54%, #10132c 100%);
+      contain: paint;
+      isolation: isolate;
       transition: opacity .55s ease, visibility .55s ease;
     }
     #relay-status::before,
@@ -30,7 +32,8 @@
       height: 32rem;
       border: 1px solid rgba(139, 218, 255, .08);
       border-radius: 50%;
-      animation: relay-drift 12s ease-in-out infinite;
+      animation: relay-drift 18s ease-in-out infinite;
+      will-change: transform;
     }
     #relay-status::after { width: 21rem; height: 21rem; animation-delay: -4s; opacity: .6; }
     #relay-status.is-hidden { opacity: 0; visibility: hidden; }
@@ -45,7 +48,8 @@
       border-radius: 1.5rem;
       background: linear-gradient(145deg, rgba(255, 255, 255, .13), rgba(255, 255, 255, .045));
       box-shadow: 0 1.5rem 5rem rgba(0, 0, 0, .38), inset 0 1px rgba(255, 255, 255, .18);
-      backdrop-filter: blur(22px) saturate(135%);
+      backdrop-filter: blur(12px) saturate(120%);
+      contain: layout paint;
       text-align: center;
     }
     .relay-loader::before {
@@ -57,7 +61,8 @@
       content: "";
       background: linear-gradient(100deg, transparent, rgba(160, 232, 255, .16), transparent);
       transform: rotate(-12deg);
-      animation: relay-shimmer 3.8s ease-in-out infinite;
+      animation: relay-shimmer 5s ease-in-out infinite;
+      will-change: transform;
     }
     .relay-orbit {
       position: relative;
@@ -69,7 +74,9 @@
       border: 1px solid rgba(137, 225, 255, .34);
       border-radius: 50%;
       box-shadow: 0 0 2rem rgba(46, 197, 255, .22), inset 0 0 1rem rgba(46, 197, 255, .12);
-      animation: relay-pulse 2.4s ease-in-out infinite;
+      animation: relay-pulse 3.2s ease-in-out infinite;
+      transform: translateZ(0);
+      will-change: transform;
     }
     .relay-orbit::before,
     .relay-orbit::after {
@@ -79,22 +86,23 @@
       border-radius: 50%;
       inset: -.55rem .7rem;
       transform: rotate(35deg);
-      animation: relay-spin 3.2s linear infinite;
+      animation: relay-spin 6s linear infinite;
+      will-change: transform;
     }
-    .relay-orbit::after { inset: .7rem -.55rem; transform: rotate(-35deg); animation-direction: reverse; }
+    .relay-orbit::after { inset: .7rem -.55rem; transform: rotate(-35deg); animation-duration: 7s; animation-direction: reverse; }
     .relay-core {
       width: 2.3rem;
       height: 2.3rem;
       border-radius: .75rem;
       background: linear-gradient(145deg, #baf4ff, #4ba7ff);
       box-shadow: 0 .35rem 1rem rgba(66, 181, 255, .35);
-      transform: rotate(45deg);
+      transform: translateZ(0) rotate(45deg);
     }
     .relay-kicker { position: relative; color: #8fdcff; font-size: .68rem; font-weight: 700; letter-spacing: .22em; text-transform: uppercase; }
     .relay-status-message { position: relative; margin-top: .65rem; color: #f2f8ff; font-size: 1.08rem; font-weight: 600; }
     .relay-hint { position: relative; margin-top: .5rem; color: #9db3c8; font-size: .78rem; }
     .relay-progress { position: relative; height: .25rem; margin-top: 1.5rem; overflow: hidden; border-radius: 99px; background: rgba(255, 255, 255, .1); }
-    .relay-progress span { display: block; width: 42%; height: 100%; border-radius: inherit; background: linear-gradient(90deg, #62d9ff, #8d9dff); box-shadow: 0 0 .8rem rgba(98, 217, 255, .75); animation: relay-progress 1.8s ease-in-out infinite; }
+    .relay-progress span { display: block; width: 42%; height: 100%; border-radius: inherit; background: linear-gradient(90deg, #62d9ff, #8d9dff); box-shadow: 0 0 .8rem rgba(98, 217, 255, .75); animation: relay-progress 2.2s ease-in-out infinite; will-change: transform; }
     iframe { position: relative; z-index: 1; flex: 1; width: 100%; min-height: 0; border: 0; border-radius: .5rem; background: white; }
     body.embed main { display: block; padding: 0; }
     body.embed iframe { display: block; width: 100vw; height: 100vh; border-radius: 0; }
