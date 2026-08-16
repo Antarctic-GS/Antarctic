@@ -91,6 +91,9 @@ function persistTabState() {
 
 // Central browser application session storage matrix
 let tabState = loadPersistedTabState();
+let relayWarmupFrame = null;
+let relayWarmupReady = false;
+let pendingRelayTarget = null;
 
 // =========================================================================
 // 2. DOM ELEMENT SELECTORS
@@ -219,6 +222,49 @@ function updateTabMetadata(tab, metadata) {
   persistTabState();
 }
 
+function setRelayFrameMode(frame, isWarmup) {
+  frame.id = isWarmup ? 'relay-warmup-frame' : 'game-sandbox-frame';
+  frame.title = isWarmup ? 'Antarctic relay warmup' : 'Antarctic proxy result';
+  frame.setAttribute('aria-hidden', String(isWarmup));
+  frame.style.cssText = isWarmup
+    ? 'position: fixed; width: 1px; height: 1px; right: 0; bottom: 0; border: 0; opacity: 0; pointer-events: none;'
+    : 'width: 100%; height: 100%; border: none; background: transparent; margin: 0; padding: 0; display: block;';
+}
+
+function createRelayWarmupFrame() {
+  if (relayWarmupFrame) return relayWarmupFrame;
+
+  relayWarmupFrame = document.createElement('iframe');
+  relayWarmupFrame.src = 'assets/relay/?embed=1&prewarm=1';
+  setRelayFrameMode(relayWarmupFrame, true);
+  document.body.appendChild(relayWarmupFrame);
+  return relayWarmupFrame;
+}
+
+function parkRelayWarmupFrame() {
+  if (!relayWarmupFrame || relayWarmupFrame.parentNode === document.body) return;
+  setRelayFrameMode(relayWarmupFrame, true);
+  document.body.appendChild(relayWarmupFrame);
+}
+
+function sendRelayTarget(target) {
+  pendingRelayTarget = target;
+  if (!relayWarmupReady || !relayWarmupFrame?.contentWindow) return;
+
+  relayWarmupFrame.contentWindow.postMessage({
+    type: 'antarctic:relay-navigate',
+    url: pendingRelayTarget
+  }, '*');
+  pendingRelayTarget = null;
+}
+
+function mountRelayFrame(wrapper) {
+  const frame = createRelayWarmupFrame();
+  setRelayFrameMode(frame, false);
+  wrapper.appendChild(frame);
+  return frame;
+}
+
 // =========================================================================
 // 3. PAGE VIEW ROUTER & DYNAMIC SUB-PAGE INJECTION ENGINE (IFRAME RESOLVER)
 // =========================================================================
@@ -241,6 +287,8 @@ function updateViewportContent(url, actualFilePath = null) {
     : null);
   const viewport = document.getElementById('viewport-content');
   if (!viewport) return;
+
+  parkRelayWarmupFrame();
 
   // Remove any previously mounted game overlay panels from the screen
   const existingOverlay = document.getElementById('launcher-floating-pills');
@@ -317,17 +365,11 @@ function updateViewportContent(url, actualFilePath = null) {
     const relayUrl = `assets/relay/?embed=1&url=${encodeURIComponent(externalTarget)}`;
     viewport.innerHTML = `
       <div style="position: relative; width: 100%; height: 100%;" id="sandbox-wrapper">
-        <iframe src="${relayUrl}" title="Antarctic proxy result" style="
-          width: 100%;
-          height: 100%;
-          border: none;
-          background: transparent;
-          margin: 0;
-          padding: 0;
-          display: block;
-        " id="game-sandbox-frame"></iframe>
       </div>
     `;
+    const wrapper = document.getElementById('sandbox-wrapper');
+    mountRelayFrame(wrapper);
+    sendRelayTarget(externalTarget);
     injectLauncherOverlayDeck(relayUrl);
     return;
   }
@@ -898,7 +940,16 @@ window.renderTabs = renderTabs;
 
 window.addEventListener('message', (event) => {
   const metadata = event.data;
-  if (!metadata || metadata.type !== 'antarctic:page-metadata') return;
+  if (!metadata) return;
+
+  if (metadata.type === 'antarctic:relay-ready') {
+    if (event.source !== relayWarmupFrame?.contentWindow) return;
+    relayWarmupReady = true;
+    if (pendingRelayTarget) sendRelayTarget(pendingRelayTarget);
+    return;
+  }
+
+  if (metadata.type !== 'antarctic:page-metadata') return;
 
   const frame = document.getElementById('game-sandbox-frame');
   const activeTab = tabState.tabs.find(tab => tab.id === tabState.activeTabId);
@@ -997,4 +1048,5 @@ document.querySelectorAll('.grid-item').forEach(item => {
 });
 
 // Boot execution handle
+createRelayWarmupFrame();
 renderTabs();

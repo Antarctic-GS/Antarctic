@@ -17,6 +17,7 @@ if (new URLSearchParams(location.search).get("embed") === "1") {
 
 let frame;
 let currentTarget = null;
+let pendingTarget = getInitialTarget();
 
 function assetPath(file) {
   return new URL(`./package/dist/${file}`, relayBase).pathname;
@@ -56,6 +57,34 @@ function getInitialTarget() {
     return null;
   }
 }
+
+function isValidTarget(target) {
+  return typeof target === "string" && /^https?:\/\//i.test(target);
+}
+
+function navigateTarget(target) {
+  if (!isValidTarget(target)) return;
+
+  let normalizedTarget;
+  try {
+    normalizedTarget = new URL(target).href;
+  } catch {
+    return;
+  }
+
+  currentTarget = normalizedTarget;
+  pendingTarget = currentTarget;
+  if (!frame) return;
+
+  frame.go(currentTarget);
+  pendingTarget = null;
+  setStatus(`Loading · ${currentTarget}`);
+}
+
+window.addEventListener("message", (event) => {
+  if (event.source !== window.parent || event.data?.type !== "antarctic:relay-navigate") return;
+  navigateTarget(event.data.url);
+});
 
 function publishPageMetadata() {
   if (!frame || !currentTarget) return;
@@ -172,13 +201,13 @@ async function initializeRelay() {
     }, 150);
   });
   window.scramjetController = controller;
+  window.parent.postMessage({ type: "antarctic:relay-ready" }, "*");
   setStatus(`Relay ready · ${getWispUrl()}`);
 
-  const initialTarget = getInitialTarget();
-  if (initialTarget) {
-    currentTarget = initialTarget;
-    frame.go(initialTarget);
-    setStatus(`Loading · ${initialTarget}`);
+  if (pendingTarget) {
+    const initialTarget = pendingTarget;
+    pendingTarget = null;
+    navigateTarget(initialTarget);
   }
 }
 

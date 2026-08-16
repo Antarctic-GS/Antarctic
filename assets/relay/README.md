@@ -8,4 +8,8 @@ Service workers require HTTPS in production (localhost is allowed for local test
 
 For an iframe-ready relay view, pass `embed=1&url=<encoded-http-url>`; Antarctic's search bar uses this mode for external lookups.
 
+Antarctic also prewarms one hidden embedded relay when the site loads, then
+reuses that Scramjet instance for external navigation. Warmed relays accept
+`postMessage({ type: "antarctic:relay-navigate", url })` from their parent.
+
 The bundled Scramjet controller preserves proxied site state across reloads. Cookies are persisted in the controller's IndexedDB store, while proxied `localStorage` and `sessionStorage` values are namespaced by remote host in the relay origin. Do not clear the relay origin's site data if you want those sessions and preferences to remain available.
