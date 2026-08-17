@@ -1577,6 +1577,12 @@ var EpoxyTransport = class {
     await epoxy_bundled_default();
     let options = new EpoxyClientOptions();
     options.user_agent = navigator.userAgent;
+    // Local Antarctic development may terminate traffic through a user-provided
+    // Wisp/TLS path whose certificate is not in the browser WASM trust store.
+    // Keep this opt-in to loopback Wisp endpoints; public relays still validate.
+    if (/^wss?:\/\/(?:127\.0\.0\.1|localhost|\[::1\])(?::\d+)?\//i.test(this.wisp)) {
+      options.disable_certificate_validation = true;
+    }
     opts.forEach((x) => this.setopt(options, x));
     this.client = new EpoxyClient(this.wisp, options);
     this.ready = true;

@@ -488,11 +488,24 @@ function createRelayWarmupFrame() {
 function buildRelayUrl(options = {}) {
   const params = new URLSearchParams({
     embed: '1',
-    backend: appSettings.relayBackend
+    backend: options.backend || appSettings.relayBackend
   });
   if (options.prewarm) params.set('prewarm', '1');
   if (options.url) params.set('url', options.url);
   return `assets/relay/?${params.toString()}`;
+}
+
+async function createRelaySessionUrl({ backend = appSettings.relayBackend, url }) {
+  const response = await fetch('/api/relay/session', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ backend, url })
+  });
+  const payload = await response.json().catch(() => ({}));
+  if (!response.ok || typeof payload.path !== 'string') {
+    throw new Error(payload.error || `Relay session failed (${response.status}).`);
+  }
+  return new URL(payload.path, document.baseURI).href;
 }
 
 function parkRelayWarmupFrame() {
@@ -507,7 +520,9 @@ function sendRelayTarget(target) {
 
   relayWarmupFrame.contentWindow.postMessage({
     type: 'antarctic:relay-navigate',
-    url: pendingRelayTarget
+    url: pendingRelayTarget,
+    initial: true,
+    userInitiated: false
   }, '*');
   pendingRelayTarget = null;
 }
@@ -515,6 +530,8 @@ function sendRelayTarget(target) {
 function mountRelayFrame(wrapper, relayUrl) {
   const frame = document.createElement('iframe');
   frame.src = relayUrl;
+  frame.allow = 'autoplay; encrypted-media; picture-in-picture';
+  frame.setAttribute('allowfullscreen', '');
   setRelayFrameMode(frame, false);
   wrapper.appendChild(frame);
   return frame;
@@ -616,6 +633,28 @@ function updateViewportContent(url, actualFilePath = null) {
     return;
   }
 
+  if (routeKey === 'music') {
+    fetch('music.html')
+      .then(response => {
+        if (!response.ok) throw new Error(`Target location offline (${response.status})`);
+        return response.text();
+      })
+      .then(htmlContent => {
+        viewport.innerHTML = htmlContent;
+        initializeMusicPortalEngine();
+      })
+      .catch(err => {
+        console.error(err);
+        viewport.innerHTML = `
+          <div style="text-align: center; padding: 60px 20px; color: #ef4444; font-family: 'Saira', sans-serif;">
+            <h2 style="font-size: 18px; margin-bottom: 8px;">Failed to load music</h2>
+            <p style="color: #64748b; font-size: 13px; font-family: monospace;">${err.message}</p>
+          </div>
+        `;
+      });
+    return;
+  }
+
   if (routeKey === 'settings') {
     fetch('settings.html')
       .then(response => {
@@ -661,14 +700,24 @@ function updateViewportContent(url, actualFilePath = null) {
   }
 
   if (externalTarget) {
-    const relayUrl = buildRelayUrl({ url: externalTarget });
     viewport.innerHTML = `
       <div style="position: relative; width: 100%; height: 100%;" id="sandbox-wrapper">
+        <div class="relay-session-loading" style="display: grid; height: 100%; place-items: center; color: #94a3b8;">Opening relay session…</div>
       </div>
     `;
     const wrapper = document.getElementById('sandbox-wrapper');
-    mountRelayFrame(wrapper, relayUrl);
-    injectLauncherOverlayDeck(relayUrl);
+    let visibleRelayUrl = null;
+    createRelaySessionUrl({ url: externalTarget })
+      .then(relayUrl => {
+        if (!wrapper?.isConnected) return;
+        visibleRelayUrl = relayUrl;
+        wrapper.querySelector('.relay-session-loading')?.remove();
+        mountRelayFrame(wrapper, relayUrl);
+      })
+      .catch(error => {
+        if (wrapper) wrapper.innerHTML = `<div style="display:grid;height:100%;place-items:center;color:#fca5a5;">${error.message}</div>`;
+      });
+    injectLauncherOverlayDeck(externalTarget, async () => visibleRelayUrl || createRelaySessionUrl({ url: externalTarget }));
     return;
   }
 
@@ -698,7 +747,7 @@ function updateViewportContent(url, actualFilePath = null) {
  * Dynamically constructs and mounts a floating helper toolbar over running game sandboxes
  * @param {string} targetFile - Source system path for fallback tab actions
  */
-function injectLauncherOverlayDeck(targetFile) {
+function injectLauncherOverlayDeck(targetFile, openTarget = targetFile) {
   const mainWrapper = document.getElementById('sandbox-wrapper');
   if (!mainWrapper) return;
 
@@ -771,8 +820,16 @@ function injectLauncherOverlayDeck(targetFile) {
 
   ntBtn.addEventListener('mouseenter', () => { ntIcon.style.filter = 'invert(96%) sepia(6%) saturate(301%) hue-rotate(182deg) brightness(103%) contrast(93%)'; });
   ntBtn.addEventListener('mouseleave', () => { ntIcon.style.filter = 'invert(63%) sepia(13%) saturate(452%) hue-rotate(176deg) brightness(91%) contrast(89%)'; });
-  ntBtn.addEventListener('click', () => {
-    window.open(targetFile, '_blank');
+  ntBtn.addEventListener('click', async () => {
+    const openedWindow = window.open('about:blank', '_blank');
+    if (!openedWindow) return;
+    try {
+      const target = typeof openTarget === 'function' ? await openTarget() : openTarget;
+      openedWindow.location.href = target;
+    } catch (error) {
+      openedWindow.close();
+      console.error('Unable to open relay session:', error);
+    }
   });
 }
 
@@ -1048,9 +1105,530 @@ function initializeAppsPortalEngine() {
 }
 
 // =========================================================================
-// 7. SUB-PAGE ENGINE: SETTINGS PORTAL INITIALIZER
+// 7. SUB-PAGE ENGINE: MUSIC PORTAL INITIALIZER
+// =========================================================================
+function initializeMusicPortalEngine() {
+  const frameHost = document.getElementById('music-relay-host');
+  const searchFrameHost = document.getElementById('music-search-relay-host');
+  const addForm = document.getElementById('music-add-form');
+  const addInput = document.getElementById('music-add-input');
+  const searchStatus = document.getElementById('music-search-status');
+  const searchResults = document.getElementById('music-search-results');
+  const browseSections = document.getElementById('music-browse-sections');
+  const browseStatus = document.getElementById('music-browse-status');
+  const queueList = document.getElementById('music-queue-list');
+  const queueCount = document.getElementById('music-queue-count');
+  const currentTitle = document.getElementById('music-now-playing-title');
+  const currentSource = document.getElementById('music-now-playing-source');
+  const dockArt = document.querySelector('.music-dock-art');
+  const playerStatus = document.getElementById('music-player-status');
+  const playButton = document.getElementById('music-play');
+  const previousButton = document.getElementById('music-previous');
+  const nextButton = document.getElementById('music-next');
+  const progress = document.getElementById('music-progress');
+  const currentTime = document.getElementById('music-current-time');
+  const duration = document.getElementById('music-duration');
+  const volume = document.getElementById('music-volume');
+  const refresh = document.getElementById('music-refresh');
+  const fullscreen = document.getElementById('music-fullscreen');
+  const backendLabel = document.getElementById('music-backend-label');
+
+  if (!frameHost) return;
+
+  const MUSIC_STORAGE_KEY = 'antarctic.music-queue.v1';
+  const previousMessageHandler = window.__antarcticMusicMessageHandler;
+  if (previousMessageHandler) window.removeEventListener('message', previousMessageHandler);
+
+  let queue = [];
+  let currentIndex = -1;
+  let musicFrame = null;
+  let searchRelayFrame = null;
+  let activeSearch = null;
+  let browseLoaded = false;
+  let autoPlayWhenReady = false;
+  let musicFrameRequest = 0;
+  let mediaState = { currentTime: 0, duration: 0, paused: true, volume: 1 };
+
+  const browseConfigs = [
+    { id: 'top-hits', title: 'Top songs', query: 'top songs official audio' },
+    { id: 'pop', title: 'Pop', query: 'pop songs official audio' },
+    { id: 'hip-hop', title: 'Hip-Hop', query: 'hip hop songs official audio' },
+    { id: 'rnb', title: 'R&B', query: 'r&b songs official audio' }
+  ];
+
+  try {
+    const savedQueue = JSON.parse(localStorage.getItem(MUSIC_STORAGE_KEY));
+    if (Array.isArray(savedQueue)) {
+      queue = savedQueue.filter(track => track && typeof track.videoId === 'string' && typeof track.title === 'string');
+    }
+  } catch (error) {
+    queue = [];
+  }
+
+  const persistQueue = () => {
+    try {
+      localStorage.setItem(MUSIC_STORAGE_KEY, JSON.stringify(queue));
+    } catch (error) {
+      // Storage can be unavailable in private or restricted browser contexts.
+    }
+  };
+
+  const formatTime = value => {
+    const totalSeconds = Math.max(0, Math.floor(Number(value) || 0));
+    const minutes = Math.floor(totalSeconds / 60);
+    const seconds = String(totalSeconds % 60).padStart(2, '0');
+    return `${minutes}:${seconds}`;
+  };
+
+  const embedUrlFor = videoId => `https://www.youtube.com/embed/${encodeURIComponent(videoId)}?enablejsapi=1&autoplay=1&mute=1&controls=0&playsinline=1&rel=0&modestbranding=1`;
+
+  if (backendLabel) {
+    backendLabel.textContent = `${appSettings.relayBackend === 'ultraviolet' ? 'Ultraviolet' : 'Scramjet'} relay`;
+  }
+
+  const sendMediaCommand = (command, value, userInitiated = false) => {
+    musicFrame?.contentWindow?.postMessage({
+      type: 'antarctic:relay-media-command',
+      command,
+      value,
+      userInitiated
+    }, '*');
+  };
+
+  const updateControls = () => {
+    const hasTrack = currentIndex >= 0 && queue[currentIndex];
+    const isPlaying = hasTrack && !mediaState.paused;
+    if (currentTitle) currentTitle.textContent = hasTrack ? queue[currentIndex].title : 'Nothing playing';
+    if (currentSource) currentSource.textContent = hasTrack ? 'YouTube Music · Antarctic relay' : 'Choose a song to begin';
+    if (dockArt) {
+      dockArt.style.backgroundImage = hasTrack && queue[currentIndex].thumbnail
+        ? `url("${queue[currentIndex].thumbnail}")`
+        : '';
+      dockArt.style.backgroundSize = 'cover';
+      dockArt.style.backgroundPosition = 'center';
+    }
+    if (currentTime) currentTime.textContent = formatTime(mediaState.currentTime);
+    if (duration) duration.textContent = formatTime(mediaState.duration);
+    if (progress) {
+      progress.max = String(mediaState.duration || 0);
+      progress.value = String(Math.min(mediaState.currentTime, mediaState.duration || mediaState.currentTime));
+      progress.disabled = !hasTrack || !mediaState.duration;
+    }
+    if (volume) volume.value = String(mediaState.volume ?? 1);
+    if (playButton) {
+      playButton.textContent = isPlaying ? 'Ⅱ' : '▶';
+      playButton.setAttribute('aria-label', isPlaying ? 'Pause' : 'Play');
+      playButton.disabled = !hasTrack;
+    }
+    if (previousButton) previousButton.disabled = !hasTrack;
+    if (nextButton) nextButton.disabled = !hasTrack;
+    if (playerStatus) playerStatus.textContent = hasTrack
+      ? (isPlaying ? 'Playing through Antarctic relay' : 'Ready to play')
+      : 'Waiting for a track';
+  };
+
+  const renderQueue = () => {
+    if (queueCount) queueCount.textContent = `${queue.length} ${queue.length === 1 ? 'track' : 'tracks'}`;
+    if (!queueList) return;
+    queueList.innerHTML = '';
+
+    if (queue.length === 0) {
+      const empty = document.createElement('div');
+      empty.className = 'music-empty-queue';
+      empty.textContent = 'Your queue is empty. Search for a song above.';
+      queueList.appendChild(empty);
+      return;
+    }
+
+    queue.forEach((track, index) => {
+      const item = document.createElement('div');
+      item.className = `music-queue-item${index === currentIndex ? ' active' : ''}`;
+      item.dataset.trackIndex = String(index);
+      item.tabIndex = 0;
+      item.setAttribute('role', 'button');
+
+      const number = document.createElement('span');
+      number.className = 'music-queue-number';
+      number.textContent = String(index + 1).padStart(2, '0');
+
+      const copy = document.createElement('span');
+      copy.className = 'music-queue-copy';
+      const title = document.createElement('span');
+      title.className = 'music-queue-title';
+      title.textContent = track.title;
+      const provider = document.createElement('span');
+      provider.className = 'music-queue-provider';
+      provider.textContent = 'YouTube';
+      copy.append(title, provider);
+
+      const remove = document.createElement('button');
+      remove.className = 'music-queue-remove';
+      remove.type = 'button';
+      remove.dataset.removeTrack = String(index);
+      remove.setAttribute('aria-label', `Remove ${track.title}`);
+      remove.textContent = '×';
+      item.append(number, copy, remove);
+      queueList.appendChild(item);
+    });
+  };
+
+  const createTrackCard = result => {
+    const button = document.createElement('button');
+    button.className = 'music-card';
+    button.type = 'button';
+    button.dataset.videoId = result.videoId;
+    button.dataset.trackTitle = result.title;
+    button.dataset.sourceUrl = result.sourceUrl;
+    button.dataset.thumbnail = result.thumbnail || '';
+
+    const art = document.createElement('span');
+    art.className = 'music-card-art';
+    if (result.thumbnail) {
+      const image = document.createElement('img');
+      image.src = result.thumbnail;
+      image.alt = '';
+      image.loading = 'lazy';
+      image.addEventListener('error', () => image.remove(), { once: true });
+      art.appendChild(image);
+    }
+
+    const copy = document.createElement('span');
+    copy.className = 'music-card-copy';
+    const title = document.createElement('span');
+    title.className = 'music-card-title';
+    title.textContent = result.title;
+    const subtitle = document.createElement('span');
+    subtitle.className = 'music-card-subtitle';
+    subtitle.textContent = 'YouTube Music';
+    copy.append(title, subtitle);
+    button.append(art, copy);
+    return button;
+  };
+
+  const renderSearchResults = results => {
+    if (!searchResults) return;
+    searchResults.innerHTML = '';
+    if (!results.length) {
+      const empty = document.createElement('div');
+      empty.className = 'music-empty-queue';
+      empty.textContent = 'No songs found for that search.';
+      searchResults.appendChild(empty);
+      return;
+    }
+    results.forEach(result => searchResults.appendChild(createTrackCard(result)));
+  };
+
+  const renderShelf = (config, results) => {
+    if (!browseSections) return;
+    const shelf = browseSections.querySelector(`[data-music-shelf="${config.id}"]`);
+    if (!shelf) return;
+    const row = shelf.querySelector('.music-card-row');
+    if (!row) return;
+    row.innerHTML = '';
+    if (!results.length) {
+      const empty = document.createElement('div');
+      empty.className = 'music-empty-queue';
+      empty.textContent = 'No songs found for this shelf.';
+      row.appendChild(empty);
+      return;
+    }
+    results.forEach(result => row.appendChild(createTrackCard(result)));
+  };
+
+  const renderBrowsePlaceholders = () => {
+    if (!browseSections) return;
+    browseSections.innerHTML = '';
+    browseConfigs.forEach(config => {
+      const shelf = document.createElement('section');
+      shelf.className = 'music-shelf';
+      shelf.dataset.musicShelf = config.id;
+      const heading = document.createElement('div');
+      heading.className = 'music-shelf-heading';
+      const title = document.createElement('h2');
+      title.textContent = config.title;
+      const status = document.createElement('span');
+      status.textContent = 'Loading…';
+      heading.append(title, status);
+      const row = document.createElement('div');
+      row.className = 'music-card-row';
+      const loading = document.createElement('div');
+      loading.className = 'music-empty-queue';
+      loading.textContent = 'Finding songs…';
+      row.appendChild(loading);
+      shelf.append(heading, row);
+      browseSections.appendChild(shelf);
+    });
+  };
+
+  const mountMusicFrame = async (track, autoPlay = false, userInitiated = false) => {
+    const requestId = ++musicFrameRequest;
+    frameHost.innerHTML = '';
+    musicFrame = null;
+    autoPlayWhenReady = Boolean(track && autoPlay && userInitiated);
+    if (!track) {
+      musicFrame = null;
+      mediaState = { currentTime: 0, duration: 0, paused: true, volume: 1 };
+      updateControls();
+      return;
+    }
+
+    // Music follows the same relay backend selected in Settings.
+    const musicBackend = appSettings.relayBackend;
+    if (backendLabel) backendLabel.textContent = `${musicBackend === 'ultraviolet' ? 'Ultraviolet' : 'Scramjet'} music relay`;
+    try {
+      const relayUrl = await createRelaySessionUrl({ backend: musicBackend, url: embedUrlFor(track.videoId) });
+      if (requestId !== musicFrameRequest) return;
+      musicFrame = mountRelayFrame(frameHost, relayUrl);
+    } catch (error) {
+      if (requestId === musicFrameRequest && playerStatus) playerStatus.textContent = error.message;
+      return;
+    }
+    musicFrame.id = 'music-relay-frame';
+    musicFrame.title = `YouTube player for ${track.title}`;
+    musicFrame.addEventListener('load', () => {
+      if (playerStatus) playerStatus.textContent = 'Player surface ready';
+    }, { once: true });
+    mediaState = { currentTime: 0, duration: 0, paused: true, volume: Number(volume?.value || 1) };
+    updateControls();
+  };
+
+  const selectTrack = (index, event = null) => {
+    if (!queue[index]) return;
+    currentIndex = index;
+    renderQueue();
+    mountMusicFrame(queue[currentIndex], true, event?.isTrusted === true);
+  };
+
+  const advanceTrack = step => {
+    if (queue.length === 0) return;
+    selectTrack((currentIndex + step + queue.length) % queue.length);
+  };
+
+  const searchYouTubeMusic = (query, mode = 'search', config = null) => {
+    const request = { query, mode, config };
+    activeSearch = request;
+    if (mode === 'search' && searchStatus) searchStatus.textContent = 'Searching Antarctic music index…';
+    if (mode === 'browse' && browseStatus) browseStatus.textContent = `Loading ${config.title.toLowerCase()} through the relay…`;
+
+    fetch(`/api/music/search?q=${encodeURIComponent(query)}`)
+      .then(response => response.ok ? response.json() : response.json().catch(() => ({})).then(body => Promise.reject(new Error(body.error || `Search failed (${response.status}).`))))
+      .then(payload => {
+        if (activeSearch !== request) return;
+        const results = Array.isArray(payload.results) ? payload.results : [];
+        if (mode === 'browse') {
+          renderShelf(config, results);
+          const shelf = browseSections?.querySelector(`[data-music-shelf="${config.id}"]`);
+          const shelfStatus = shelf?.querySelector('.music-shelf-heading span');
+          if (shelfStatus) shelfStatus.textContent = `${results.length} picks`;
+          window.__antarcticMusicBrowseNext?.();
+        } else {
+          renderSearchResults(results);
+          if (searchStatus) searchStatus.textContent = `${results.length} results found.`;
+        }
+      })
+      .catch(error => {
+        if (activeSearch !== request) return;
+        if (mode === 'browse') {
+          renderShelf(config, []);
+          if (browseStatus) browseStatus.textContent = error.message;
+          window.__antarcticMusicBrowseNext?.();
+        } else if (searchStatus) {
+          searchStatus.textContent = error.message;
+          renderSearchResults([]);
+        }
+      });
+  };
+
+  addForm?.addEventListener('submit', event => {
+    event.preventDefault();
+    const query = addInput?.value.trim();
+    if (!query) return;
+    if (searchResults) {
+      searchResults.hidden = false;
+      searchResults.innerHTML = '';
+    }
+    if (browseSections) browseSections.hidden = true;
+    searchYouTubeMusic(query, 'search');
+  });
+
+  const handleTrackCardClick = event => {
+    if (!event.isTrusted) return;
+    const result = event.target.closest('[data-video-id]');
+    if (!result) return;
+    queue.push({
+      videoId: result.dataset.videoId,
+      title: result.dataset.trackTitle,
+      sourceUrl: result.dataset.sourceUrl,
+      thumbnail: result.dataset.thumbnail || ''
+    });
+    persistQueue();
+    renderQueue();
+    selectTrack(queue.length - 1, event);
+    if (searchStatus) searchStatus.textContent = 'Added to queue.';
+  };
+
+  searchResults?.addEventListener('click', handleTrackCardClick);
+  browseSections?.addEventListener('click', handleTrackCardClick);
+
+  document.querySelectorAll('[data-music-view]').forEach(button => {
+    button.addEventListener('click', () => {
+      const view = button.dataset.musicView;
+      document.querySelectorAll('[data-music-view]').forEach(item => item.classList.toggle('active', item === button));
+      if (view === 'browse') {
+        if (searchResults) searchResults.hidden = true;
+        if (browseSections) browseSections.hidden = false;
+        if (!browseLoaded || activeSearch?.mode !== 'browse') startBrowse();
+      } else if (view === 'search') {
+        if (searchResults) searchResults.hidden = false;
+        if (browseSections) browseSections.hidden = true;
+        addInput?.focus();
+      } else if (view === 'queue') {
+        queueList?.scrollIntoView({ behavior: appSettings.reduceMotion ? 'auto' : 'smooth', block: 'nearest' });
+      }
+    });
+  });
+
+  queueList?.addEventListener('click', event => {
+    if (!event.isTrusted) return;
+    const removeButton = event.target.closest('[data-remove-track]');
+    if (removeButton) {
+      const index = Number(removeButton.dataset.removeTrack);
+      queue.splice(index, 1);
+      persistQueue();
+      if (queue.length === 0) currentIndex = -1;
+      else if (index < currentIndex) currentIndex -= 1;
+      else if (index === currentIndex) currentIndex = Math.min(currentIndex, queue.length - 1);
+      renderQueue();
+      mountMusicFrame(queue[currentIndex]);
+      return;
+    }
+    const item = event.target.closest('[data-track-index]');
+    if (item) selectTrack(Number(item.dataset.trackIndex), event);
+  });
+
+  queueList?.addEventListener('keydown', event => {
+    if (!event.isTrusted) return;
+    if (event.key !== 'Enter' && event.key !== ' ') return;
+    const item = event.target.closest('[data-track-index]');
+    if (!item || event.target.closest('[data-remove-track]')) return;
+    event.preventDefault();
+    selectTrack(Number(item.dataset.trackIndex), event);
+  });
+
+  playButton?.addEventListener('click', event => sendMediaCommand('toggle', undefined, event.isTrusted));
+  previousButton?.addEventListener('click', event => {
+    if (event.isTrusted) advanceTrack(-1);
+  });
+  nextButton?.addEventListener('click', event => {
+    if (event.isTrusted) advanceTrack(1);
+  });
+  progress?.addEventListener('input', event => {
+    if (event.isTrusted) sendMediaCommand('seek', Number(progress.value), true);
+  });
+  volume?.addEventListener('input', event => {
+    if (event.isTrusted) sendMediaCommand('volume', Number(volume.value), true);
+  });
+
+  refresh?.addEventListener('click', event => {
+    if (!event.isTrusted) return;
+    const track = queue[currentIndex];
+    if (track) {
+      const frameToRefresh = musicFrame;
+      const musicBackend = appSettings.relayBackend;
+      createRelaySessionUrl({ backend: musicBackend, url: embedUrlFor(track.videoId) })
+        .then(relayUrl => {
+          if (frameToRefresh && frameToRefresh === musicFrame) frameToRefresh.src = relayUrl;
+        })
+        .catch(error => {
+          if (playerStatus) playerStatus.textContent = error.message;
+        });
+    }
+  });
+
+  fullscreen?.addEventListener('click', () => {
+    const shell = document.querySelector('.music-page');
+    shell?.requestFullscreen?.().catch(() => {});
+  });
+
+  function startBrowse() {
+    if (!browseSections) return;
+    browseLoaded = true;
+    if (searchResults) searchResults.hidden = true;
+    browseSections.hidden = false;
+    renderBrowsePlaceholders();
+    let shelfIndex = 0;
+    const loadNextShelf = () => {
+      const config = browseConfigs[shelfIndex];
+      if (!config) {
+        if (browseStatus) browseStatus.textContent = 'Fresh picks for your Antarctic session.';
+        return;
+      }
+      activeSearch = { query: config.query, mode: 'browse', config, shelfIndex };
+      searchYouTubeMusic(config.query, 'browse', config);
+    };
+    activeSearch = { loadNextShelf };
+    window.__antarcticMusicBrowseNext = () => {
+      shelfIndex += 1;
+      loadNextShelf();
+    };
+    loadNextShelf();
+  }
+
+  const messageHandler = event => {
+    if (event.source === musicFrame?.contentWindow && event.data?.type === 'antarctic:relay-media-ready') {
+      if (playerStatus) playerStatus.textContent = 'Ready to play';
+      if (autoPlayWhenReady) {
+        const shouldAutoplay = autoPlayWhenReady;
+        autoPlayWhenReady = false;
+        sendMediaCommand('play', undefined, shouldAutoplay);
+      }
+      return;
+    }
+    if (event.source === musicFrame?.contentWindow && event.data?.type === 'antarctic:relay-media-error') {
+      if (playerStatus) playerStatus.textContent = event.data.message || 'Playback was blocked.';
+      return;
+    }
+    if (event.source === musicFrame?.contentWindow && event.data?.type === 'antarctic:relay-media-state') {
+      mediaState = { ...mediaState, ...event.data.state };
+      updateControls();
+      if (mediaState.ended) advanceTrack(1);
+      return;
+    }
+    if (event.source === searchRelayFrame?.contentWindow && event.data?.type === 'antarctic:relay-search-results') {
+      const results = Array.isArray(event.data.results) ? event.data.results : [];
+      if (!activeSearch || (event.data.query && event.data.query.toLowerCase() !== activeSearch.query.toLowerCase())) return;
+      if (activeSearch.mode === 'browse') {
+        renderShelf(activeSearch.config, results);
+        const shelf = browseSections?.querySelector(`[data-music-shelf="${activeSearch.config.id}"]`);
+        const shelfStatus = shelf?.querySelector('.music-shelf-heading span');
+        if (shelfStatus) shelfStatus.textContent = `${results.length} picks`;
+        window.__antarcticMusicBrowseNext?.();
+      } else {
+        renderSearchResults(results);
+        if (searchStatus) searchStatus.textContent = `${results.length} results found.`;
+      }
+    }
+  };
+  window.__antarcticMusicMessageHandler = messageHandler;
+  window.addEventListener('message', messageHandler);
+
+  if (queue.length > 0) {
+    currentIndex = 0;
+    renderQueue();
+    mountMusicFrame(queue[currentIndex]);
+  } else {
+    renderQueue();
+    mountMusicFrame(null);
+  }
+  startBrowse();
+}
+
+// =========================================================================
+// 8. SUB-PAGE ENGINE: SETTINGS PORTAL INITIALIZER
 // =========================================================================
 function initializeSettingsPortalEngine() {
+  const categoryTabs = [...document.querySelectorAll('[data-settings-tab]')];
+  const categoryPanels = [...document.querySelectorAll('[role="tabpanel"][id^="settings-panel-"]')];
   const reduceMotion = document.getElementById('settingsReduceMotion');
   const relayBackend = document.getElementById('settingsRelayBackend');
   const restoreSidebar = document.getElementById('settingsRestoreSidebar');
@@ -1059,6 +1637,40 @@ function initializeSettingsPortalEngine() {
   const clearData = document.getElementById('settingsClearData');
   const notice = document.getElementById('settingsNotice');
   const termsLink = document.getElementById('settingsTermsLink');
+
+  const activateSettingsCategory = (category, moveFocus = false) => {
+    categoryTabs.forEach(tab => {
+      const isActive = tab.dataset.settingsTab === category;
+      tab.setAttribute('aria-selected', String(isActive));
+      tab.tabIndex = isActive ? 0 : -1;
+      if (isActive && moveFocus) tab.focus();
+    });
+
+    categoryPanels.forEach(panel => {
+      panel.hidden = panel.id !== `settings-panel-${category}`;
+    });
+  };
+
+  categoryTabs.forEach((tab, index) => {
+    tab.addEventListener('click', () => activateSettingsCategory(tab.dataset.settingsTab));
+    tab.addEventListener('keydown', event => {
+      if (!['ArrowRight', 'ArrowDown', 'ArrowLeft', 'ArrowUp', 'Home', 'End'].includes(event.key)) return;
+
+      event.preventDefault();
+      let nextIndex = index;
+      if (event.key === 'Home') nextIndex = 0;
+      if (event.key === 'End') nextIndex = categoryTabs.length - 1;
+      if (event.key === 'ArrowRight' || event.key === 'ArrowDown') {
+        nextIndex = (index + 1) % categoryTabs.length;
+      }
+      if (event.key === 'ArrowLeft' || event.key === 'ArrowUp') {
+        nextIndex = (index - 1 + categoryTabs.length) % categoryTabs.length;
+      }
+
+      const nextTab = categoryTabs[nextIndex];
+      activateSettingsCategory(nextTab.dataset.settingsTab, true);
+    });
+  });
 
   if (reduceMotion) {
     reduceMotion.checked = appSettings.reduceMotion;
@@ -1337,6 +1949,7 @@ window.switchTab = switchTab;
 window.renderTabs = renderTabs;
 
 window.addEventListener('message', (event) => {
+  if (event.origin !== window.location.origin) return;
   const metadata = event.data;
   if (!metadata) return;
 
@@ -1351,10 +1964,14 @@ window.addEventListener('message', (event) => {
 
   const frame = document.getElementById('game-sandbox-frame');
   const activeTab = tabState.tabs.find(tab => tab.id === tabState.activeTabId);
-  if (!frame || !activeTab || event.source !== frame.contentWindow) return;
+  if (!frame || frame.closest('.music-page') || !activeTab || event.source !== frame.contentWindow) return;
 
-  if (metadata.url && /^https?:\/\//i.test(metadata.url)
-    && normalizeRemoteUrl(metadata.url) !== normalizeRemoteUrl(activeTab.url)) {
+  const metadataTargetChanged = metadata.url
+    && /^https?:\/\//i.test(metadata.url)
+    && normalizeRemoteUrl(metadata.url) !== normalizeRemoteUrl(activeTab.url);
+  if (metadataTargetChanged && metadata.userInitiated !== true) return;
+
+  if (metadataTargetChanged) {
     navigateTabTo(activeTab, {
       url: metadata.url,
       actualPath: null,

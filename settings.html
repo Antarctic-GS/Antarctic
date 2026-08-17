@@ -1,111 +1,202 @@
 <style>
   .settings-page {
+    height: 100%;
     min-height: 100%;
-    padding: 24px;
     color: var(--text-main);
     font-family: var(--font-primary);
   }
 
-  .settings-header,
-  .settings-grid {
-    width: min(100%, 900px);
+  .settings-workspace,
+  .settings-notice {
+    width: 100%;
     margin: 0 auto;
   }
 
-  .settings-header { margin-bottom: 24px; }
-  .settings-eyebrow {
-    margin-bottom: 8px;
-    color: #7dd3fc;
-    font-size: 11px;
-    font-weight: 700;
-    letter-spacing: 2px;
-    text-transform: uppercase;
-  }
-  .settings-title {
-    margin: 0;
-    color: #f8fafc;
-    font-size: clamp(28px, 4vw, 42px);
-    line-height: 1;
-    letter-spacing: -1.5px;
-  }
-  .settings-subtitle {
-    max-width: 520px;
-    margin-top: 12px;
-    color: #94a3b8;
-    font-size: 13px;
-    line-height: 1.6;
+  .sr-only {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    padding: 0;
+    margin: -1px;
+    overflow: hidden;
+    clip: rect(0, 0, 0, 0);
+    white-space: nowrap;
+    border: 0;
   }
 
-  .settings-grid {
+  .settings-workspace {
     display: grid;
-    grid-template-columns: repeat(2, minmax(0, 1fr));
-    gap: 14px;
+    grid-template-columns: 178px minmax(0, 1fr);
+    width: 100%;
+    max-width: none;
+    height: 100%;
+    min-height: 100%;
+    overflow: hidden;
+    border: 0;
+    border-radius: 0;
+    background: rgba(7, 15, 34, .56);
+    box-shadow: inset 0 1px rgba(255, 255, 255, .07);
+    backdrop-filter: blur(14px);
   }
 
-  .settings-card {
+  .settings-tab-list {
     display: flex;
-    min-height: 150px;
     flex-direction: column;
-    justify-content: space-between;
-    gap: 20px;
-    padding: 20px;
-    border: 1px solid rgba(148, 163, 184, .14);
-    border-radius: 16px;
-    background: linear-gradient(145deg, rgba(255, 255, 255, .09), rgba(15, 23, 42, .32));
-    box-shadow: inset 0 1px rgba(255, 255, 255, .08), 0 14px 34px rgba(2, 6, 23, .2);
-    backdrop-filter: blur(12px);
+    gap: 6px;
+    padding: 14px;
+    border-right: 1px solid rgba(148, 163, 184, .12);
+    background: rgba(15, 23, 42, .46);
   }
 
-  .settings-card:hover {
+  .settings-tab {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    min-height: 42px;
+    padding: 10px 11px;
+    border: 1px solid transparent;
+    border-radius: 10px;
+    background: transparent;
+    color: #94a3b8;
+    font: inherit;
+    font-size: 12px;
+    text-align: left;
+    cursor: pointer;
+    transition: background .2s ease, border-color .2s ease, color .2s ease, transform .2s ease;
+  }
+
+  .settings-tab:hover {
     border-color: rgba(125, 211, 252, .28);
-    transform: translateY(-2px);
-    transition: transform .2s ease, border-color .2s ease;
+    color: #e0f2fe;
+    transform: translateX(2px);
   }
 
-  .settings-card h2 {
+  .settings-tab[aria-selected="true"] {
+    border-color: rgba(56, 189, 248, .28);
+    background: linear-gradient(135deg, rgba(14, 116, 144, .28), rgba(30, 41, 59, .5));
+    color: #e0f2fe;
+    box-shadow: inset 3px 0 #38bdf8, inset 0 1px rgba(255, 255, 255, .06);
+  }
+
+  .settings-tab:focus-visible,
+  .settings-select:focus-visible,
+  .settings-link:focus-visible,
+  .settings-danger:focus-visible {
+    outline: 2px solid #7dd3fc;
+    outline-offset: 3px;
+  }
+
+  .settings-tab-index {
+    display: inline-grid;
+    width: 24px;
+    height: 24px;
+    flex: 0 0 auto;
+    place-items: center;
+    border: 1px solid rgba(125, 211, 252, .18);
+    border-radius: 7px;
+    color: #7dd3fc;
+    font-size: 9px;
+    font-weight: 700;
+    letter-spacing: .3px;
+  }
+
+  .settings-tab[aria-selected="true"] .settings-tab-index {
+    border-color: rgba(125, 211, 252, .42);
+    background: rgba(56, 189, 248, .12);
+  }
+
+  .settings-content {
+    min-width: 0;
+    min-height: 0;
+    overflow: auto;
+    padding: 24px;
+  }
+
+  .settings-panel[hidden] {
+    display: none;
+  }
+
+  .settings-panel-header {
+    margin-bottom: 18px;
+  }
+
+  .settings-panel-header h2 {
     margin: 0 0 7px;
     color: #e2e8f0;
-    font-size: 15px;
+    font-size: 20px;
+    letter-spacing: -.4px;
   }
-  .settings-card p {
+
+  .settings-panel-header p,
+  .settings-row p {
     margin: 0;
     color: #94a3b8;
     font-size: 12px;
     line-height: 1.5;
   }
-  .settings-status {
-    align-self: flex-start;
-    padding: 5px 9px;
-    border: 1px solid rgba(74, 222, 128, .24);
-    border-radius: 999px;
-    background: rgba(34, 197, 94, .1);
-    color: #bbf7d0;
-    font-size: 10px;
-    font-weight: 700;
-    letter-spacing: .4px;
-    text-transform: uppercase;
+
+  .settings-panel-header p {
+    max-width: 520px;
   }
 
-  .settings-toggle {
+  .settings-options {
+    overflow: hidden;
+    border: 1px solid rgba(148, 163, 184, .14);
+    border-radius: 14px;
+    background: rgba(15, 23, 42, .42);
+  }
+
+  .settings-row {
     display: flex;
     align-items: center;
     justify-content: space-between;
-    gap: 12px;
+    gap: 18px;
+    min-height: 78px;
+    padding: 15px 17px;
+  }
+
+  .settings-row + .settings-row {
+    border-top: 1px solid rgba(148, 163, 184, .11);
+  }
+
+  .settings-row-copy {
+    min-width: 0;
+  }
+
+  .settings-row h3 {
+    margin: 0 0 5px;
+    color: #e2e8f0;
+    font-size: 13px;
+    font-weight: 600;
+  }
+
+  .settings-row-control {
+    display: flex;
+    align-items: center;
+    justify-content: flex-end;
+    flex: 0 0 auto;
+  }
+
+  .settings-toggle {
+    display: inline-flex;
+    align-items: center;
+    gap: 10px;
     color: #cbd5e1;
-    font-size: 12px;
+    font-size: 11px;
+    white-space: nowrap;
     cursor: pointer;
   }
+
   .settings-toggle input {
     width: 20px;
     height: 20px;
     margin: 0;
-    cursor: pointer;
   }
 
   .settings-select {
     appearance: none;
     -webkit-appearance: none;
-    min-width: 140px;
+    min-width: 136px;
     padding: 8px 30px 8px 10px;
     border: 1px solid rgba(125, 211, 252, .28);
     border-radius: 9px;
@@ -119,22 +210,20 @@
     font-size: 12px;
     cursor: pointer;
   }
-  .settings-select:focus-visible,
-  .settings-link:focus-visible {
-    outline: 2px solid #7dd3fc;
-    outline-offset: 3px;
-  }
 
-  .settings-link {
-    align-self: flex-start;
+  .settings-link,
+  .settings-danger {
     padding: 8px 11px;
-    border: 1px solid rgba(125, 211, 252, .24);
     border-radius: 9px;
-    background: rgba(14, 116, 144, .18);
-    color: #bae6fd;
     font: inherit;
     font-size: 11px;
     cursor: pointer;
+  }
+
+  .settings-link {
+    border: 1px solid rgba(125, 211, 252, .24);
+    background: rgba(14, 116, 144, .18);
+    color: #bae6fd;
   }
   .settings-link:hover {
     border-color: rgba(125, 211, 252, .5);
@@ -142,25 +231,19 @@
   }
 
   .settings-danger {
-    align-self: flex-start;
-    padding: 8px 11px;
     border: 1px solid rgba(248, 113, 113, .24);
-    border-radius: 9px;
     background: rgba(127, 29, 29, .18);
     color: #fecaca;
-    font: inherit;
-    font-size: 11px;
-    cursor: pointer;
     transition: background .2s ease, border-color .2s ease;
   }
   .settings-danger:hover {
     border-color: rgba(248, 113, 113, .5);
     background: rgba(127, 29, 29, .32);
   }
+
   .settings-notice {
     min-height: 18px;
-    margin: 16px auto 0;
-    width: min(100%, 900px);
+    margin-top: 16px;
     color: #7dd3fc;
     font-size: 11px;
   }
@@ -176,89 +259,156 @@
 
   @media (max-width: 680px) {
     .settings-page { padding: 24px 18px; }
-    .settings-grid { grid-template-columns: 1fr; }
+    .settings-workspace { grid-template-columns: 1fr; }
+    .settings-tab-list {
+      display: grid;
+      grid-template-columns: repeat(3, minmax(0, 1fr));
+      border-right: 0;
+      border-bottom: 1px solid rgba(148, 163, 184, .12);
+    }
+    .settings-tab { justify-content: center; padding-inline: 8px; }
+    .settings-tab:hover { transform: translateY(-1px); }
+    .settings-tab[aria-selected="true"] {
+      box-shadow: inset 0 -3px #38bdf8, inset 0 1px rgba(255, 255, 255, .06);
+    }
+  }
+
+  @media (max-width: 440px) {
+    .settings-content { padding: 18px 14px; }
+    .settings-tab { gap: 0; }
+    .settings-tab-index { display: none; }
+    .settings-row {
+      align-items: flex-start;
+      flex-direction: column;
+      gap: 12px;
+    }
+    .settings-row-control { justify-content: flex-start; }
   }
 </style>
 
 <section class="settings-page" aria-label="Settings">
-  <header class="settings-header">
-    <div class="settings-eyebrow">Antarctic controls</div>
-    <h1 class="settings-title">Settings</h1>
-    <p class="settings-subtitle">Tune your Antarctic session and manage the browser preferences saved on this device.</p>
-  </header>
+  <div class="settings-workspace">
+    <div class="settings-tab-list" role="tablist" aria-label="Settings categories">
+      <button id="settings-tab-general" class="settings-tab" type="button" role="tab" aria-selected="true" aria-controls="settings-panel-general" data-settings-tab="general">
+        <span class="settings-tab-index" aria-hidden="true">01</span>
+        <span>General</span>
+      </button>
+      <button id="settings-tab-workspace" class="settings-tab" type="button" role="tab" aria-selected="false" aria-controls="settings-panel-workspace" data-settings-tab="workspace" tabindex="-1">
+        <span class="settings-tab-index" aria-hidden="true">02</span>
+        <span>Workspace</span>
+      </button>
+      <button id="settings-tab-privacy" class="settings-tab" type="button" role="tab" aria-selected="false" aria-controls="settings-panel-privacy" data-settings-tab="privacy" tabindex="-1">
+        <span class="settings-tab-index" aria-hidden="true">03</span>
+        <span>Privacy &amp; legal</span>
+      </button>
+    </div>
 
-  <div class="settings-grid">
-    <section class="settings-card">
-      <div>
-        <h2>Relay backend</h2>
-        <p>Choose which browser relay handles external pages. Ultraviolet is useful as an alternate when Scramjet has trouble with a site.</p>
-      </div>
-      <label class="settings-toggle">
-        <span>Backend</span>
-        <select id="settingsRelayBackend" class="settings-select" aria-label="Relay backend">
-          <option value="scramjet">Scramjet</option>
-          <option value="ultraviolet">Ultraviolet</option>
-        </select>
-      </label>
-    </section>
+    <div class="settings-content">
+      <section id="settings-panel-general" class="settings-panel" role="tabpanel" aria-labelledby="settings-tab-general" tabindex="0">
+        <header class="settings-panel-header">
+          <h2>General</h2>
+          <p>Choose how Antarctic connects to external pages and how much motion the interface uses.</p>
+        </header>
+        <div class="settings-options">
+          <div class="settings-row">
+            <div class="settings-row-copy">
+              <h3>Relay backend</h3>
+              <p>Choose which browser relay handles external pages.</p>
+            </div>
+            <div class="settings-row-control">
+              <label class="settings-toggle">
+                <span class="sr-only">Relay backend</span>
+                <select id="settingsRelayBackend" class="settings-select" aria-label="Relay backend">
+                  <option value="scramjet">Scramjet</option>
+                  <option value="ultraviolet">Ultraviolet</option>
+                </select>
+              </label>
+            </div>
+          </div>
+          <div class="settings-row">
+            <div class="settings-row-copy">
+              <h3>Reduced motion</h3>
+              <p>Minimize interface animations for a calmer browsing experience.</p>
+            </div>
+            <div class="settings-row-control">
+              <label class="settings-toggle">
+                <span>Use reduced motion</span>
+                <input id="settingsReduceMotion" type="checkbox">
+              </label>
+            </div>
+          </div>
+        </div>
+      </section>
 
-    <section class="settings-card">
-      <div>
-        <h2>Reduced motion</h2>
-        <p>Minimize interface animations for a calmer browsing experience.</p>
-      </div>
-      <label class="settings-toggle">
-        <span>Use reduced motion</span>
-        <input id="settingsReduceMotion" type="checkbox">
-      </label>
-    </section>
+      <section id="settings-panel-workspace" class="settings-panel" role="tabpanel" aria-labelledby="settings-tab-workspace" tabindex="0" hidden>
+        <header class="settings-panel-header">
+          <h2>Workspace</h2>
+          <p>Control which parts of your Antarctic workspace are remembered between sessions.</p>
+        </header>
+        <div class="settings-options">
+          <div class="settings-row">
+            <div class="settings-row-copy">
+              <h3>Sidebar memory</h3>
+              <p>Restore the sidebar’s open or closed state when Antarctic starts.</p>
+            </div>
+            <div class="settings-row-control">
+              <label class="settings-toggle">
+                <span>Remember sidebar state</span>
+                <input id="settingsRestoreSidebar" type="checkbox">
+              </label>
+            </div>
+          </div>
+          <div class="settings-row">
+            <div class="settings-row-copy">
+              <h3>Session restore</h3>
+              <p>Restore your tabs and navigation history the next time you open Antarctic.</p>
+            </div>
+            <div class="settings-row-control">
+              <label class="settings-toggle">
+                <span>Restore saved tabs</span>
+                <input id="settingsRestoreTabs" type="checkbox">
+              </label>
+            </div>
+          </div>
+          <div class="settings-row">
+            <div class="settings-row-copy">
+              <h3>Saved tabs</h3>
+              <p>Remove the tabs and navigation history stored on this device.</p>
+            </div>
+            <div class="settings-row-control">
+              <button id="settingsClearTabs" class="settings-danger" type="button">Clear saved tabs</button>
+            </div>
+          </div>
+        </div>
+      </section>
 
-    <section class="settings-card">
-      <div>
-        <h2>Sidebar memory</h2>
-        <p>Restore the sidebar’s open or closed state when Antarctic starts.</p>
-      </div>
-      <label class="settings-toggle">
-        <span>Remember sidebar state</span>
-        <input id="settingsRestoreSidebar" type="checkbox">
-      </label>
-    </section>
-
-    <section class="settings-card">
-      <div>
-        <h2>Session restore</h2>
-        <p>Restore your tabs and navigation history the next time you open Antarctic.</p>
-      </div>
-      <label class="settings-toggle">
-        <span>Restore saved tabs</span>
-        <input id="settingsRestoreTabs" type="checkbox">
-      </label>
-    </section>
-
-    <section class="settings-card">
-      <div>
-        <h2>Saved tabs</h2>
-        <p>Your open tabs and navigation history are stored locally and restored after reopening Antarctic.</p>
-      </div>
-      <button id="settingsClearTabs" class="settings-danger" type="button">Clear saved tabs</button>
-    </section>
-
-    <section class="settings-card">
-      <div>
-        <h2>Legal</h2>
-        <p>Review the rules that govern access to Antarctic Games and its relay services.</p>
-      </div>
-      <button id="settingsTermsLink" class="settings-link" type="button">Terms of Service</button>
-    </section>
-
-    <section class="settings-card">
-      <div>
-        <h2>Privacy</h2>
-        <p>Preferences stay in this browser. Clear this app’s local storage, session storage, and browser-visible cookies here.</p>
-      </div>
-      <button id="settingsClearData" class="settings-danger" type="button">Clear cookies &amp; local data</button>
-    </section>
+      <section id="settings-panel-privacy" class="settings-panel" role="tabpanel" aria-labelledby="settings-tab-privacy" tabindex="0" hidden>
+        <header class="settings-panel-header">
+          <h2>Privacy &amp; legal</h2>
+          <p>Review Antarctic’s terms or remove locally stored browser data.</p>
+        </header>
+        <div class="settings-options">
+          <div class="settings-row">
+            <div class="settings-row-copy">
+              <h3>Terms of Service</h3>
+              <p>Review the rules that govern access to Antarctic Games and its relay services.</p>
+            </div>
+            <div class="settings-row-control">
+              <button id="settingsTermsLink" class="settings-link" type="button">Open terms</button>
+            </div>
+          </div>
+          <div class="settings-row">
+            <div class="settings-row-copy">
+              <h3>Local data</h3>
+              <p>Clear this app’s local storage, session storage, and browser-visible cookies.</p>
+            </div>
+            <div class="settings-row-control">
+              <button id="settingsClearData" class="settings-danger" type="button">Clear cookies &amp; local data</button>
+            </div>
+          </div>
+        </div>
+      </section>
+      <div id="settingsNotice" class="settings-notice" role="status" aria-live="polite"></div>
+    </div>
   </div>
-
-  <div id="settingsNotice" class="settings-notice" role="status" aria-live="polite"></div>
 </section>

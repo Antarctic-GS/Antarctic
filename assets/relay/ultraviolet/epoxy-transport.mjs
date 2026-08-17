@@ -1,4 +1,4 @@
-import "../package/dist/epoxy-transport.js";
+import "../package/dist/epoxy-transport.js?antarctic-local-cert-fix=1";
 
 const EpoxyTransport = globalThis.EpoxyTransport.default;
 

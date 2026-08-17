@@ -2,6 +2,7 @@ import { createReadStream } from 'node:fs';
 import { promises as fs } from 'node:fs';
 import { createServer as createHttpServer } from 'node:http';
 import { createServer as createHttpsServer } from 'node:https';
+import { randomBytes } from 'node:crypto';
 import { extname, join, normalize, relative, resolve } from 'node:path';
 import process from 'node:process';
 
@@ -14,6 +15,8 @@ const tlsCertificate = process.env.ANTARCTIC_TLS_CERT;
 const tlsKey = process.env.ANTARCTIC_TLS_KEY;
 const hmacSecret = process.env.ALTCHA_HMAC_SECRET ?? 'local-development-secret-change-me';
 const challengeCost = Number(process.env.ALTCHA_COST ?? 5_000);
+const relaySessionTtlMs = 30 * 60 * 1000;
+const relaySessions = new Map();
 
 const contentTypes = {
   '.css': 'text/css; charset=utf-8',
@@ -43,6 +46,96 @@ function sendJson(response, statusCode, payload) {
   response.end(body);
 }
 
+function removeExpiredRelaySessions() {
+  const expiration = Date.now() - relaySessionTtlMs;
+  for (const [id, session] of relaySessions) {
+    if (session.createdAt < expiration) relaySessions.delete(id);
+  }
+}
+
+function createRelaySession(backend, target) {
+  removeExpiredRelaySessions();
+  let id;
+  do {
+    id = randomBytes(18).toString('base64url');
+  } while (relaySessions.has(id));
+
+  relaySessions.set(id, { backend, target, createdAt: Date.now() });
+  return id;
+}
+
+function decodeRelayLinkSession(id) {
+  const separator = id.indexOf('.');
+  if (separator < 1 || separator === id.length - 1) return null;
+
+  try {
+    const encodedPayload = id.slice(separator + 1);
+    const payload = JSON.parse(Buffer.from(encodedPayload, 'base64url').toString('utf8'));
+    if (!['scramjet', 'ultraviolet'].includes(payload?.backend)) return null;
+
+    const targetUrl = new URL(payload.target);
+    if (!['http:', 'https:'].includes(targetUrl.protocol)) return null;
+
+    const session = {
+      backend: payload.backend,
+      target: targetUrl.href,
+      createdAt: Date.now()
+    };
+    relaySessions.set(id, session);
+    return session;
+  } catch {
+    return null;
+  }
+}
+
+function serializeInlineConfig(value) {
+  return JSON.stringify(value)
+    .replaceAll('<', '\\u003c')
+    .replaceAll('>', '\\u003e')
+    .replaceAll('&', '\\u0026');
+}
+
+async function renderRelaySession(session) {
+  const targetQuery = new URLSearchParams({
+    backend: session.backend,
+    embed: '1',
+    url: session.target
+  }).toString();
+  const frameSource = `/assets/relay/?${targetQuery}`;
+  const frameSourceJson = serializeInlineConfig(frameSource);
+
+  return `<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>Antarctic relay</title>
+    <style>
+      :root, body, #relay-session-frame { width: 100%; height: 100%; }
+      html, body { margin: 0; overflow: hidden; background: #081426; }
+      #relay-session-frame { display: block; border: 0; }
+    </style>
+  </head>
+  <body>
+    <iframe id="relay-session-frame" title="Antarctic relay" allow="autoplay; encrypted-media; picture-in-picture" allowfullscreen></iframe>
+    <script>
+      const parentWindow = window.parent;
+      const relayFrame = document.getElementById('relay-session-frame');
+      relayFrame.src = ${frameSourceJson};
+      window.addEventListener('message', (event) => {
+        if (event.source === relayFrame.contentWindow) {
+          parentWindow.postMessage(event.data, event.origin);
+          return;
+        }
+        if (event.source === parentWindow) {
+          relayFrame.contentWindow?.postMessage(event.data, event.origin);
+        }
+      });
+    </script>
+  </body>
+</html>`;
+}
+
 async function createAltchaChallenge() {
   return createChallenge({
     algorithm: 'PBKDF2/SHA-256',
@@ -67,6 +160,97 @@ async function readJsonBody(request) {
   }
 
   return JSON.parse(Buffer.concat(chunks).toString('utf8'));
+}
+
+function extractJsonAfterMarker(source, marker) {
+  const markerIndex = source.indexOf(marker);
+  if (markerIndex === -1) return null;
+
+  const start = source.indexOf('{', markerIndex + marker.length);
+  if (start === -1) return null;
+
+  let depth = 0;
+  let inString = false;
+  let escaped = false;
+  for (let index = start; index < source.length; index += 1) {
+    const character = source[index];
+    if (inString) {
+      if (escaped) escaped = false;
+      else if (character === '\\') escaped = true;
+      else if (character === '"') inString = false;
+      continue;
+    }
+    if (character === '"') {
+      inString = true;
+      continue;
+    }
+    if (character === '{') depth += 1;
+    if (character === '}' && --depth === 0) {
+      try {
+        return JSON.parse(source.slice(start, index + 1));
+      } catch {
+        return null;
+      }
+    }
+  }
+
+  return null;
+}
+
+function textFromRenderer(value) {
+  if (!value || typeof value !== 'object') return '';
+  if (typeof value.simpleText === 'string') return value.simpleText;
+  if (Array.isArray(value.runs)) return value.runs.map(run => run?.text ?? '').join('');
+  return '';
+}
+
+function collectYouTubeResults(value, results, seenIds) {
+  if (!value || typeof value !== 'object') return;
+  if (Array.isArray(value)) {
+    value.forEach(item => collectYouTubeResults(item, results, seenIds));
+    return;
+  }
+
+  if (typeof value.videoId === 'string' && !seenIds.has(value.videoId)) {
+    const title = textFromRenderer(value.title) || textFromRenderer(value.headline) || value.accessibility?.accessibilityData?.label;
+    if (title) {
+      const thumbnails = value.thumbnail?.thumbnails;
+      const thumbnail = Array.isArray(thumbnails) && thumbnails.length
+        ? thumbnails[thumbnails.length - 1]?.url
+        : `https://i.ytimg.com/vi/${encodeURIComponent(value.videoId)}/hqdefault.jpg`;
+      seenIds.add(value.videoId);
+      results.push({
+        videoId: value.videoId,
+        title: title.replace(/\s+/g, ' ').trim().slice(0, 120),
+        sourceUrl: `https://www.youtube.com/watch?v=${encodeURIComponent(value.videoId)}`,
+        thumbnail
+      });
+    }
+  }
+
+  Object.values(value).forEach(child => collectYouTubeResults(child, results, seenIds));
+}
+
+async function searchYouTube(query) {
+  const target = `https://www.youtube.com/results?search_query=${encodeURIComponent(query)}`;
+  const response = await fetch(target, {
+    headers: {
+      'Accept-Language': 'en-US,en;q=0.9',
+      'User-Agent': 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 Chrome/131.0.0.0 Safari/537.36'
+    }
+  });
+  if (!response.ok) throw new Error(`YouTube search returned ${response.status}.`);
+
+  const html = await response.text();
+  const initialData = extractJsonAfterMarker(html, 'var ytInitialData = ')
+    || extractJsonAfterMarker(html, 'ytInitialData = ');
+  if (!initialData) return [];
+
+  const results = [];
+  collectYouTubeResults(initialData, results, new Set());
+  const playlistLikeTitle = /\b(playlist|mix|compilation|radio|continuous|nonstop|greatest hits|top\s+\d+|best of)\b/i;
+  const songResults = results.filter(result => !playlistLikeTitle.test(result.title));
+  return songResults.slice(0, 12);
 }
 
 function resolveStaticPath(urlPath) {
@@ -117,6 +301,91 @@ async function handleRequest(request, response) {
     return;
   }
 
+  if (url.pathname === '/api/relay/session') {
+    if (request.method === 'OPTIONS') {
+      response.writeHead(204, {
+        'Access-Control-Allow-Headers': 'Content-Type',
+        'Access-Control-Allow-Methods': 'POST, OPTIONS',
+        'Access-Control-Allow-Origin': '*'
+      });
+      response.end();
+      return;
+    }
+
+    if (request.method !== 'POST') {
+      sendJson(response, 405, { error: 'Use POST to create a relay session.' });
+      return;
+    }
+
+    try {
+      const body = await readJsonBody(request);
+      const backend = body?.backend;
+      const target = typeof body?.url === 'string' ? body.url.trim() : '';
+      if (!['scramjet', 'ultraviolet'].includes(backend)) {
+        sendJson(response, 400, { error: 'A valid relay backend is required.' });
+        return;
+      }
+
+      let targetUrl;
+      try {
+        targetUrl = new URL(target);
+      } catch {
+        sendJson(response, 400, { error: 'A valid target URL is required.' });
+        return;
+      }
+
+      if (!['http:', 'https:'].includes(targetUrl.protocol)) {
+        sendJson(response, 400, { error: 'Relay targets must use HTTP or HTTPS.' });
+        return;
+      }
+
+      const id = createRelaySession(backend, targetUrl.href);
+      sendJson(response, 201, {
+        backend,
+        id,
+        path: `/relay/${id}`,
+        url: targetUrl.href
+      });
+    } catch (error) {
+      console.error('Unable to create relay session:', error);
+      sendJson(response, 400, { error: 'Unable to create a relay session.' });
+    }
+    return;
+  }
+
+  const relaySessionMatch = url.pathname.match(/^\/relay\/([A-Za-z0-9_.-]+)$/);
+  if (relaySessionMatch) {
+    if (request.method !== 'GET' && request.method !== 'HEAD') {
+      sendJson(response, 405, { error: 'Use GET for a relay session.' });
+      return;
+    }
+
+    removeExpiredRelaySessions();
+    const session = relaySessions.get(relaySessionMatch[1]) || decodeRelayLinkSession(relaySessionMatch[1]);
+    if (!session) {
+      sendJson(response, 404, { error: 'Relay session not found or expired.' });
+      return;
+    }
+
+    try {
+      const body = await renderRelaySession(session);
+      response.writeHead(200, {
+        'Cache-Control': 'no-store',
+        'Content-Length': Buffer.byteLength(body),
+        'Content-Type': 'text/html; charset=utf-8'
+      });
+      if (request.method === 'HEAD') {
+        response.end();
+      } else {
+        response.end(body);
+      }
+    } catch (error) {
+      console.error('Unable to render relay session:', error);
+      sendJson(response, 500, { error: 'Unable to render the relay session.' });
+    }
+    return;
+  }
+
   if (url.pathname === '/api/captcha/challenge') {
     if (request.method === 'OPTIONS') {
       response.writeHead(204, {
@@ -138,6 +407,37 @@ async function handleRequest(request, response) {
     } catch (error) {
       console.error('Unable to create an Altcha challenge:', error);
       sendJson(response, 500, { error: 'Unable to create a CAPTCHA challenge.' });
+    }
+    return;
+  }
+
+  if (url.pathname === '/api/music/search') {
+    if (request.method === 'OPTIONS') {
+      response.writeHead(204, {
+        'Access-Control-Allow-Headers': 'Content-Type',
+        'Access-Control-Allow-Methods': 'GET, OPTIONS',
+        'Access-Control-Allow-Origin': '*'
+      });
+      response.end();
+      return;
+    }
+
+    if (request.method !== 'GET') {
+      sendJson(response, 405, { error: 'Use GET for music search.' });
+      return;
+    }
+
+    const query = url.searchParams.get('q')?.trim();
+    if (!query) {
+      sendJson(response, 400, { error: 'A search query is required.' });
+      return;
+    }
+
+    try {
+      sendJson(response, 200, { results: await searchYouTube(query) });
+    } catch (error) {
+      console.error('Unable to search YouTube:', error);
+      sendJson(response, 502, { error: 'Unable to search YouTube right now.' });
     }
     return;
   }
@@ -205,11 +505,15 @@ async function handleRequest(request, response) {
 
   const contentType = contentTypes[extname(filePath).toLowerCase()] ?? 'application/octet-stream';
   const stats = await fs.stat(filePath);
-  response.writeHead(200, {
+  const headers = {
     'Cache-Control': 'no-cache',
     'Content-Length': stats.size,
     'Content-Type': contentType
-  });
+  };
+  if (filePath === resolve(rootDirectory, 'assets/relay/sw.js')) {
+    headers['Service-Worker-Allowed'] = '/';
+  }
+  response.writeHead(200, headers);
 
   if (request.method === 'HEAD') {
     response.end();
