@@ -1,4 +1,4 @@
-importScripts("./dist/uv.bundle.js", "./dist/uv.config.js", "./dist/uv.sw.js", "../antarctic-link-rewriter.js");
+importScripts("./dist/uv.bundle.js", "./dist/uv.config.js", "./dist/uv.sw.js", "../antarctic-link-rewriter.js", "../relay-sw-utils.js");
 
 const ultraviolet = new UVServiceWorker();
 
@@ -11,9 +11,8 @@ self.addEventListener("activate", (event) => {
 });
 
 function cloneResponse(response, body) {
-  const headers = new Headers(response.headers);
+  const headers = self.antarcticRelayHeaders(response);
   headers.delete("content-length");
-  headers.set("content-type", "text/html; charset=utf-8");
   return new Response(body, {
     headers,
     status: response.status,
@@ -61,11 +60,15 @@ function patchHtmlDocument(body, targetUrl) {
 
 async function fetchUltravioletDocument(event, request) {
   const response = await ultraviolet.fetch({ request });
-  if (!response.body || !["document", "iframe"].includes(request.destination)) return response;
+  if (!response.body
+    || !["document", "iframe"].includes(request.destination)
+    || !self.antarcticRelayIsHtmlResponse(response)) {
+    return self.antarcticRelaySanitizeResponse(response);
+  }
 
-  const body = await response.text();
+  const body = await response.clone().text();
   if (!/<head[\s>]/i.test(body)) {
-    return cloneResponse(response, body);
+    return response;
   }
 
   if (body.includes("__uv-script")) return cloneResponse(response, injectAntarcticLinkRewriter(body));
@@ -74,7 +77,16 @@ async function fetchUltravioletDocument(event, request) {
 }
 
 self.addEventListener("fetch", (event) => {
-  if (!ultraviolet.route(event)) return;
+  let routed;
+  try {
+    routed = ultraviolet.route(event);
+  } catch (error) {
+    if (self.antarcticRelayIsDocumentRequest(event.request)) {
+      event.respondWith(Promise.resolve(self.antarcticRelayErrorResponse("Ultraviolet", event.request, error)));
+    }
+    return;
+  }
+  if (!routed) return;
 
   const request = new Proxy(event.request, {
     get(target, property) {
@@ -84,5 +96,8 @@ self.addEventListener("fetch", (event) => {
     },
   });
 
-  event.respondWith(fetchUltravioletDocument(event, request));
+  event.respondWith(fetchUltravioletDocument(event, request).catch((error) => {
+    if (!self.antarcticRelayIsDocumentRequest(request)) throw error;
+    return self.antarcticRelayErrorResponse("Ultraviolet", request, error);
+  }));
 });

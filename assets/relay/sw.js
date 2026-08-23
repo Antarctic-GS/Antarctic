@@ -1,4 +1,4 @@
-importScripts("./package/dist/controller.sw.js", "./antarctic-link-rewriter.js");
+importScripts("./package/dist/controller.sw.js", "./antarctic-link-rewriter.js", "./relay-sw-utils.js");
 
 self.addEventListener("install", (event) => {
   event.waitUntil(self.skipWaiting());
@@ -9,9 +9,9 @@ self.addEventListener("activate", (event) => {
 });
 
 self.antarcticInjectLinkRewriter = async (response) => {
-  if (!response?.body) return response;
+  if (!response?.body || !self.antarcticRelayIsHtmlResponse(response)) return response;
 
-  const body = await response.text();
+  const body = await response.clone().text();
   if (!/<head[\s>]/i.test(body) || body.includes("data-antarctic-link-rewriter")) {
     return response;
   }
@@ -20,7 +20,7 @@ self.antarcticInjectLinkRewriter = async (response) => {
   const rewrittenBody = /<\/head>/i.test(body)
     ? body.replace(/<\/head>/i, `${script}</head>`)
     : `${script}${body}`;
-  const headers = new Headers(response.headers);
+  const headers = self.antarcticRelayHeaders(response);
   headers.delete("content-length");
   headers.set("content-type", "text/html; charset=utf-8");
   return new Response(rewrittenBody, {
@@ -31,12 +31,27 @@ self.antarcticInjectLinkRewriter = async (response) => {
 };
 
 self.addEventListener("fetch", (event) => {
-  if (self.$scramjetController.shouldRoute(event)) {
-    event.respondWith((async () => {
-      const response = await self.$scramjetController.route(event);
-      const destination = event.request.destination || "iframe";
-      if (!["document", "iframe"].includes(destination)) return response;
-      return self.antarcticInjectLinkRewriter(response);
-    })());
+  let shouldRoute;
+  try {
+    shouldRoute = self.$scramjetController.shouldRoute(event);
+  } catch (error) {
+    if (self.antarcticRelayIsDocumentRequest(event.request)) {
+      event.respondWith(Promise.resolve(self.antarcticRelayErrorResponse("Scramjet", event.request, error)));
+    }
+    return;
   }
+  if (!shouldRoute) return;
+
+  event.respondWith((async () => {
+    try {
+      const response = await self.$scramjetController.route(event);
+      if (!self.antarcticRelayIsDocumentRequest(event.request)) {
+        return self.antarcticRelaySanitizeResponse(response);
+      }
+      return self.antarcticInjectLinkRewriter(response);
+    } catch (error) {
+      if (!self.antarcticRelayIsDocumentRequest(event.request)) throw error;
+      return self.antarcticRelayErrorResponse("Scramjet", event.request, error);
+    }
+  })());
 });

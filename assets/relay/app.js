@@ -1,6 +1,7 @@
 const relayBase = new URL("./", document.baseURI);
-const relaySession = window.__ANTARCTIC_RELAY_SESSION;
-const relayBackend = (new URLSearchParams(location.search).get("backend") || relaySession?.backend) === "ultraviolet"
+const relaySessionId = new URLSearchParams(location.search).get("session");
+let relaySession = null;
+let relayBackend = new URLSearchParams(location.search).get("backend") === "ultraviolet"
   ? "ultraviolet"
   : "scramjet";
 const hostname = location.hostname;
@@ -14,6 +15,8 @@ const defaultWispUrl = isLocalNetworkHost
 
 const frameElement = document.querySelector("#relay-frame");
 const statusElement = document.querySelector("#relay-status");
+const relayOrigin = location.origin;
+const allowedMediaCommands = new Set(["play", "pause", "toggle", "seek", "volume"]);
 
 if (new URLSearchParams(location.search).get("embed") === "1") {
   document.body.classList.add("embed");
@@ -71,7 +74,26 @@ function hideLoadingScreen() {
 
 function getWispUrl() {
   const configured = new URLSearchParams(location.search).get("wisp");
-  return configured || defaultWispUrl;
+  if (!configured) return defaultWispUrl;
+
+  try {
+    const url = new URL(configured);
+    if (["ws:", "wss:"].includes(url.protocol)) return url.href;
+  } catch {
+    // Fall through to the known-good local/production endpoint.
+  }
+  console.warn("Ignoring invalid relay transport endpoint:", configured);
+  return defaultWispUrl;
+}
+
+function withTimeout(value, timeoutMs, message) {
+  let timeout;
+  return Promise.race([
+    Promise.resolve(value),
+    new Promise((_, reject) => {
+      timeout = window.setTimeout(() => reject(new Error(message)), timeoutMs);
+    }),
+  ]).finally(() => window.clearTimeout(timeout));
 }
 
 function getInitialTarget() {
@@ -87,8 +109,39 @@ function getInitialTarget() {
   }
 }
 
+async function loadRelaySession() {
+  if (!relaySessionId) return;
+  if (!/^[A-Za-z0-9_.-]+$/.test(relaySessionId)) {
+    throw new Error("The relay session identifier is invalid.");
+  }
+
+  const response = await fetch(`/api/relay/session/${encodeURIComponent(relaySessionId)}`, {
+    cache: "no-store",
+    credentials: "same-origin",
+    headers: { Accept: "application/json" },
+  });
+  const session = await response.json().catch(() => ({}));
+  if (!response.ok || !["scramjet", "ultraviolet"].includes(session.backend)) {
+    throw new Error(session.error || `Relay session unavailable (${response.status}).`);
+  }
+  if (!/^https?:\/\//i.test(session.target || "")) {
+    throw new Error("The relay session target is invalid.");
+  }
+
+  relaySession = session;
+  relayBackend = session.backend;
+}
+
 function isValidTarget(target) {
-  return typeof target === "string" && /^https?:\/\//i.test(target);
+  if (typeof target !== "string" || target.length > 8192) return false;
+  try {
+    const url = new URL(target);
+    return ["http:", "https:"].includes(url.protocol)
+      && !url.username
+      && !url.password;
+  } catch {
+    return false;
+  }
 }
 
 function getProxiedDocument() {
@@ -224,7 +277,7 @@ function publishMediaState(media) {
       muted: media.muted,
       ended: media.ended,
     },
-  }, "*");
+  }, relayOrigin);
 }
 
 function publishYouTubeState(info = {}) {
@@ -243,7 +296,7 @@ function publishYouTubeState(info = {}) {
       muted: Number(info.volume) === 0,
       ended: youtubePlayerState === 0,
     },
-  }, "*");
+  }, relayOrigin);
 }
 
 function sendYouTubeCommand(func, args = []) {
@@ -253,7 +306,7 @@ function sendYouTubeCommand(func, args = []) {
 }
 
 function configureYouTubePlayer() {
-  if (!/youtube\.com\/embed\//i.test(currentTarget || "")) return;
+  if (!/youtube(?:-nocookie)?\.com\/embed\//i.test(currentTarget || "")) return;
   sendYouTubeCommand("addEventListener", ["onReady"]);
   sendYouTubeCommand("addEventListener", ["onStateChange"]);
   sendYouTubeCommand("addEventListener", ["onPlaybackQualityChange"]);
@@ -267,7 +320,7 @@ function attachMediaBridge() {
   mediaBridgeCleanup?.();
   mediaBridgeCleanup = null;
 
-  if (!/youtube\.com\/embed\//i.test(currentTarget || "")) return;
+  if (!/youtube(?:-nocookie)?\.com\/embed\//i.test(currentTarget || "")) return;
 
   const media = getMediaElement();
   if (!media) {
@@ -280,7 +333,7 @@ function attachMediaBridge() {
   const stateInterval = window.setInterval(publish, 250);
   events.forEach((eventName) => media.addEventListener(eventName, publish));
   publish();
-  window.parent.postMessage({ type: "antarctic:relay-media-ready" }, "*");
+  window.parent.postMessage({ type: "antarctic:relay-media-ready" }, relayOrigin);
 
   mediaBridgeCleanup = () => {
     window.clearInterval(stateInterval);
@@ -369,7 +422,7 @@ function publishSearchResults(attempt = 0) {
       || new URL(currentTarget).searchParams.get("search_query")
       || "",
     results: [...results.values()].slice(0, 12),
-  }, "*");
+  }, relayOrigin);
 }
 
 function navigateTarget(target, { initial = false, userInitiated = false, restoring = false } = {}) {
@@ -417,7 +470,7 @@ window.addEventListener("message", (event) => {
     }
     if (playerMessage?.event === "onReady") {
       configureYouTubePlayer();
-      window.parent.postMessage({ type: "antarctic:relay-media-ready" }, "*");
+      window.parent.postMessage({ type: "antarctic:relay-media-ready" }, relayOrigin);
     }
     if (playerMessage?.event === "infoDelivery") {
       publishYouTubeState(playerMessage.info || {});
@@ -429,17 +482,20 @@ window.addEventListener("message", (event) => {
     return;
   }
   if (event.source !== window.parent || event.origin !== location.origin) return;
-  if (event.data?.type === "antarctic:relay-navigate") {
-    const initial = event.data.initial === true;
-    const userInitiated = event.data.userInitiated === true;
+  const message = event.data;
+  if (!message || typeof message !== "object" || typeof message.type !== "string") return;
+  if (message.type === "antarctic:relay-navigate") {
+    const initial = message.initial === true;
+    const userInitiated = message.userInitiated === true;
     if (!initial && !userInitiated) return;
-    navigateTarget(event.data.url, { initial, userInitiated });
+    navigateTarget(message.url, { initial, userInitiated });
   }
-  if (event.data?.type === "antarctic:relay-media-command") {
-    if (event.data.userInitiated !== true) return;
-    handleMediaCommand(event.data.command, event.data.value);
+  if (message.type === "antarctic:relay-media-command") {
+    if (message.userInitiated !== true || !allowedMediaCommands.has(message.command)) return;
+    if (["seek", "volume"].includes(message.command) && !Number.isFinite(Number(message.value))) return;
+    handleMediaCommand(message.command, message.value);
   }
-  if (event.data?.type === "antarctic:relay-search") {
+  if (message.type === "antarctic:relay-search") {
     publishSearchResults();
   }
 });
@@ -491,7 +547,7 @@ function publishPageMetadata() {
       userInitiated,
       title: pageDocument.title?.trim() || "",
       favicon,
-    }, "*");
+    }, relayOrigin);
   } catch (error) {
     // Some proxied pages can still be unavailable while their document loads.
   }
@@ -544,11 +600,11 @@ async function initializeUltraviolet() {
     type: "classic",
     updateViaCache: "none",
   });
-  await waitForServiceWorkerActivation(registration);
-  await bareMux.setTransport(
+  await waitForServiceWorkerActivation(registration, "Ultraviolet");
+  await withTimeout(bareMux.setTransport(
     new URL("./ultraviolet/epoxy-transport.mjs", relayBase).href,
     [getWispUrl()]
-  );
+  ), 15000, "Ultraviolet transport timed out. Check the relay server and try again.");
 
   frameElement.addEventListener("load", () => {
     window.setTimeout(() => {
@@ -561,7 +617,7 @@ async function initializeUltraviolet() {
   });
   window.ultravioletRegistration = registration;
   window.ultravioletBareMux = bareMux;
-  window.parent.postMessage({ type: "antarctic:relay-ready" }, "*");
+  window.parent.postMessage({ type: "antarctic:relay-ready" }, relayOrigin);
   setStatus(`Relay ready · Ultraviolet · ${getWispUrl()}`);
 
   if (pendingTarget) {
@@ -595,13 +651,13 @@ async function waitForController(registration) {
   });
 }
 
-function waitForServiceWorkerActivation(registration) {
+function waitForServiceWorkerActivation(registration, backend = "relay") {
   const worker = registration.active || registration.waiting || registration.installing;
   if (!worker || worker.state === "activated") return Promise.resolve();
 
   return new Promise((resolve, reject) => {
     const timeout = setTimeout(() => {
-      reject(new Error("The Ultraviolet service worker did not activate."));
+      reject(new Error(`The ${backend} service worker did not activate.`));
     }, 10000);
 
     worker.addEventListener("statechange", () => {
@@ -613,6 +669,9 @@ function waitForServiceWorkerActivation(registration) {
 }
 
 async function initializeRelay() {
+  await loadRelaySession();
+  pendingTarget = getInitialTarget();
+
   if (!window.isSecureContext || !("serviceWorker" in navigator)) {
     throw new Error("Scramjet requires HTTPS or localhost and service-worker support.");
   }
@@ -627,14 +686,18 @@ async function initializeRelay() {
   await loadScript("./package/dist/epoxy-transport.js?antarctic-local-cert-fix=1");
 
   const transport = createTransport();
-  const transportReady = transport.init();
+  const transportReady = withTimeout(
+    transport.init(),
+    15000,
+    "Scramjet transport timed out. Check the relay server and try again."
+  );
 
-  const registration = await navigator.serviceWorker.register("./sw.js", {
+  const registration = await navigator.serviceWorker.register("./sw.js?antarctic-sj-fix=2", {
     scope: relaySession ? "/" : new URL("./", relayBase).pathname,
     type: "classic",
-    updateViaCache: "imports",
+    updateViaCache: "none",
   });
-  await waitForServiceWorkerActivation(registration);
+  await waitForServiceWorkerActivation(registration, "Scramjet");
   const serviceWorker = await waitForController(registration);
   await transportReady;
 
@@ -650,7 +713,11 @@ async function initializeRelay() {
     },
   });
 
-  await controller.wait();
+  await withTimeout(
+    controller.wait(),
+    15000,
+    "Scramjet controller timed out. Refresh the page and try again."
+  );
   frame = controller.createFrame(frameElement);
   frame.element.addEventListener("load", () => {
     window.setTimeout(() => {
@@ -662,7 +729,7 @@ async function initializeRelay() {
     }, 150);
   });
   window.scramjetController = controller;
-  window.parent.postMessage({ type: "antarctic:relay-ready" }, "*");
+  window.parent.postMessage({ type: "antarctic:relay-ready" }, relayOrigin);
   setStatus(`Relay ready · Scramjet · ${getWispUrl()}`);
 
   if (pendingTarget) {
@@ -674,5 +741,10 @@ async function initializeRelay() {
 
 initializeRelay().catch((error) => {
   console.error(`${relayBackend} relay failed to initialize:`, error);
+  window.parent.postMessage({
+    type: "antarctic:relay-error",
+    backend: relayBackend,
+    message: error.message || "The relay backend failed to initialize.",
+  }, relayOrigin);
   setStatus(error.message, true);
 });

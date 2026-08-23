@@ -8,6 +8,7 @@ const TAB_STORAGE_KEY = 'antarctic.tab-state.v1';
 const SETTINGS_STORAGE_KEY = 'antarctic.settings.v1';
 const ACCESS_GATE_STORAGE_KEY = 'antarctic.access-accepted.v1';
 const SIDEBAR_STORAGE_KEY = 'antarctic.sidebar-state.v1';
+const MAX_TAB_HISTORY_ENTRIES = 50;
 
 function createNavigationEntry(values) {
   return {
@@ -390,6 +391,10 @@ function navigateTabTo(tab, values) {
     tab.history = tab.history.slice(0, tab.historyIndex + 1);
     tab.history.push(nextEntry);
     tab.historyIndex = tab.history.length - 1;
+    if (tab.history.length > MAX_TAB_HISTORY_ENTRIES) {
+      tab.history.splice(0, tab.history.length - MAX_TAB_HISTORY_ENTRIES);
+      tab.historyIndex = tab.history.length - 1;
+    }
   }
 
   Object.assign(tab, nextEntry);
@@ -468,6 +473,7 @@ function updateTabMetadata(tab, metadata) {
 function setRelayFrameMode(frame, isWarmup) {
   frame.id = isWarmup ? 'relay-warmup-frame' : 'game-sandbox-frame';
   frame.title = isWarmup ? 'Antarctic relay warmup' : 'Antarctic proxy result';
+  frame.referrerPolicy = 'no-referrer';
   frame.setAttribute('aria-hidden', String(isWarmup));
   frame.style.cssText = isWarmup
     ? 'position: fixed; width: 1px; height: 1px; right: 0; bottom: 0; border: 0; opacity: 0; pointer-events: none;'
@@ -475,7 +481,6 @@ function setRelayFrameMode(frame, isWarmup) {
 }
 
 function createRelayWarmupFrame() {
-  if (appSettings.relayBackend === 'ultraviolet') return null;
   if (relayWarmupFrame) return relayWarmupFrame;
 
   relayWarmupFrame = document.createElement('iframe');
@@ -508,6 +513,24 @@ async function createRelaySessionUrl({ backend = appSettings.relayBackend, url }
   return new URL(payload.path, document.baseURI).href;
 }
 
+function alternateRelayBackend(backend) {
+  return backend === 'ultraviolet' ? 'scramjet' : 'ultraviolet';
+}
+
+function setRelaySessionNotice(frame, message, isError = false) {
+  const wrapper = frame?.closest('#sandbox-wrapper');
+  if (!wrapper) return;
+  let notice = wrapper.querySelector('.relay-session-notice');
+  if (!notice) {
+    notice = document.createElement('div');
+    notice.className = 'relay-session-notice';
+    notice.style.cssText = 'position:absolute;z-index:2;inset:16px auto auto 16px;max-width:calc(100% - 32px);padding:10px 14px;border:1px solid rgba(126,215,255,.35);border-radius:10px;background:rgba(7,16,31,.88);color:#b7d5e8;font:600 13px system-ui,sans-serif;backdrop-filter:blur(10px);';
+    wrapper.appendChild(notice);
+  }
+  notice.textContent = message;
+  notice.style.color = isError ? '#fecaca' : '#b7d5e8';
+}
+
 function parkRelayWarmupFrame() {
   if (!relayWarmupFrame || relayWarmupFrame.parentNode === document.body) return;
   setRelayFrameMode(relayWarmupFrame, true);
@@ -530,6 +553,7 @@ function sendRelayTarget(target) {
 function mountRelayFrame(wrapper, relayUrl) {
   const frame = document.createElement('iframe');
   frame.src = relayUrl;
+  frame.referrerPolicy = 'no-referrer';
   frame.allow = 'autoplay; encrypted-media; picture-in-picture';
   frame.setAttribute('allowfullscreen', '');
   setRelayFrameMode(frame, false);
@@ -712,7 +736,10 @@ function updateViewportContent(url, actualFilePath = null) {
         if (!wrapper?.isConnected) return;
         visibleRelayUrl = relayUrl;
         wrapper.querySelector('.relay-session-loading')?.remove();
-        mountRelayFrame(wrapper, relayUrl);
+        const frame = mountRelayFrame(wrapper, relayUrl);
+        frame.__antarcticRelayTarget = externalTarget;
+        frame.__antarcticRelayBackend = appSettings.relayBackend;
+        frame.__antarcticRelayFallbackAttempted = false;
       })
       .catch(error => {
         if (wrapper) wrapper.innerHTML = `<div style="display:grid;height:100%;place-items:center;color:#fca5a5;">${error.message}</div>`;
@@ -1147,6 +1174,8 @@ function initializeMusicPortalEngine() {
   let browseLoaded = false;
   let autoPlayWhenReady = false;
   let musicFrameRequest = 0;
+  let musicFrameMode = 'relay';
+  let directPlayerPoll = null;
   let mediaState = { currentTime: 0, duration: 0, paused: true, volume: 1 };
 
   const browseConfigs = [
@@ -1180,13 +1209,52 @@ function initializeMusicPortalEngine() {
     return `${minutes}:${seconds}`;
   };
 
-  const embedUrlFor = videoId => `https://www.youtube.com/embed/${encodeURIComponent(videoId)}?enablejsapi=1&autoplay=1&mute=1&controls=0&playsinline=1&rel=0&modestbranding=1`;
+  const embedUrlFor = videoId => {
+    const params = new URLSearchParams({
+      enablejsapi: '1',
+      autoplay: '1',
+      mute: '1',
+      controls: '0',
+      playsinline: '1',
+      rel: '0',
+      modestbranding: '1',
+      origin: location.origin
+    });
+    return `https://www.youtube-nocookie.com/embed/${encodeURIComponent(videoId)}?${params}`;
+  };
+
+  const directEmbedUrlFor = videoId => embedUrlFor(videoId);
 
   if (backendLabel) {
     backendLabel.textContent = `${appSettings.relayBackend === 'ultraviolet' ? 'Ultraviolet' : 'Scramjet'} relay`;
   }
 
   const sendMediaCommand = (command, value, userInitiated = false) => {
+    if (musicFrameMode === 'direct') {
+      const directCommand = command === 'toggle'
+        ? (mediaState.paused ? 'playVideo' : 'pauseVideo')
+        : command === 'play'
+          ? 'playVideo'
+          : command === 'pause'
+            ? 'pauseVideo'
+            : command === 'seek'
+              ? 'seekTo'
+              : command === 'volume'
+                ? 'setVolume'
+                : null;
+      if (!directCommand) return;
+      if (command === 'play') {
+        musicFrame?.contentWindow?.postMessage(JSON.stringify({ event: 'command', func: 'unMute', args: [] }), '*');
+      }
+      const args = command === 'seek'
+        ? [Number(value) || 0, true]
+        : command === 'volume'
+          ? [Math.round(Math.max(0, Math.min(1, Number(value) || 0)) * 100)]
+          : [];
+      musicFrame?.contentWindow?.postMessage(JSON.stringify({ event: 'command', func: directCommand, args }), '*');
+      return;
+    }
+
     musicFrame?.contentWindow?.postMessage({
       type: 'antarctic:relay-media-command',
       command,
@@ -1362,8 +1430,10 @@ function initializeMusicPortalEngine() {
 
   const mountMusicFrame = async (track, autoPlay = false, userInitiated = false) => {
     const requestId = ++musicFrameRequest;
+    window.clearInterval(directPlayerPoll);
     frameHost.innerHTML = '';
     musicFrame = null;
+    musicFrameMode = 'direct';
     autoPlayWhenReady = Boolean(track && autoPlay && userInitiated);
     if (!track) {
       musicFrame = null;
@@ -1372,21 +1442,37 @@ function initializeMusicPortalEngine() {
       return;
     }
 
-    // Music follows the same relay backend selected in Settings.
+    // Music discovery follows the selected relay backend, but playback uses a
+    // first-party privacy-enhanced YouTube iframe. YouTube's anti-abuse
+    // GenerateIT request cannot reliably complete through Wisp/Scramjet/UV,
+    // which leaves a proxied player frozen at 0:00.
     const musicBackend = appSettings.relayBackend;
-    if (backendLabel) backendLabel.textContent = `${musicBackend === 'ultraviolet' ? 'Ultraviolet' : 'Scramjet'} music relay`;
-    try {
-      const relayUrl = await createRelaySessionUrl({ backend: musicBackend, url: embedUrlFor(track.videoId) });
-      if (requestId !== musicFrameRequest) return;
-      musicFrame = mountRelayFrame(frameHost, relayUrl);
-    } catch (error) {
-      if (requestId === musicFrameRequest && playerStatus) playerStatus.textContent = error.message;
-      return;
-    }
-    musicFrame.id = 'music-relay-frame';
-    musicFrame.title = `YouTube player for ${track.title}`;
+    if (backendLabel) backendLabel.textContent = `${musicBackend === 'ultraviolet' ? 'Ultraviolet' : 'Scramjet'} discovery · direct player`;
+    const directFrame = document.createElement('iframe');
+    directFrame.id = 'music-direct-frame';
+    directFrame.title = `YouTube player for ${track.title}`;
+    directFrame.src = directEmbedUrlFor(track.videoId);
+    directFrame.allow = 'autoplay; encrypted-media; picture-in-picture; compute-pressure';
+    directFrame.setAttribute('allowfullscreen', '');
+    directFrame.style.cssText = 'width: 100%; height: 100%; border: 0;';
+    musicFrame = directFrame;
+    frameHost.appendChild(directFrame);
+    directPlayerPoll = window.setInterval(() => {
+      if (requestId !== musicFrameRequest || musicFrameMode !== 'direct') return;
+      ['getCurrentTime', 'getDuration', 'getPlayerState', 'getVolume'].forEach(func => {
+        musicFrame?.contentWindow?.postMessage(JSON.stringify({ event: 'command', func, args: [] }), '*');
+      });
+    }, 500);
     musicFrame.addEventListener('load', () => {
-      if (playerStatus) playerStatus.textContent = 'Player surface ready';
+      if (requestId !== musicFrameRequest) return;
+      if (playerStatus) playerStatus.textContent = 'Direct player surface ready';
+      ['onReady', 'onStateChange', 'infoDelivery'].forEach(eventName => {
+        musicFrame.contentWindow?.postMessage(JSON.stringify({
+          event: 'command',
+          func: 'addEventListener',
+          args: [eventName]
+        }), '*');
+      });
     }, { once: true });
     mediaState = { currentTime: 0, duration: 0, paused: true, volume: Number(volume?.value || 1) };
     updateControls();
@@ -1533,15 +1619,9 @@ function initializeMusicPortalEngine() {
     if (!event.isTrusted) return;
     const track = queue[currentIndex];
     if (track) {
-      const frameToRefresh = musicFrame;
-      const musicBackend = appSettings.relayBackend;
-      createRelaySessionUrl({ backend: musicBackend, url: embedUrlFor(track.videoId) })
-        .then(relayUrl => {
-          if (frameToRefresh && frameToRefresh === musicFrame) frameToRefresh.src = relayUrl;
-        })
-        .catch(error => {
-          if (playerStatus) playerStatus.textContent = error.message;
-        });
+      musicFrame.src = directEmbedUrlFor(track.videoId);
+      mediaState = { currentTime: 0, duration: 0, paused: true, volume: Number(volume?.value || 1) };
+      updateControls();
     }
   });
 
@@ -1575,6 +1655,47 @@ function initializeMusicPortalEngine() {
   }
 
   const messageHandler = event => {
+    if (event.source === musicFrame?.contentWindow && musicFrameMode === 'direct') {
+      let playerMessage = event.data;
+      if (typeof playerMessage === 'string') {
+        try {
+          playerMessage = JSON.parse(playerMessage);
+        } catch (error) {
+          playerMessage = null;
+        }
+      }
+      if (playerMessage?.event === 'onReady') {
+        if (playerStatus) playerStatus.textContent = 'Ready to play directly';
+        if (autoPlayWhenReady) {
+          autoPlayWhenReady = false;
+          sendMediaCommand('play', undefined, true);
+        }
+      }
+      if (playerMessage?.event === 'infoDelivery') {
+        const info = playerMessage.info || {};
+        const playerState = Number(info.playerState);
+        const nextState = {
+          currentTime: Number(info.currentTime) || 0,
+          duration: Number(info.duration) || 0,
+          paused: Number.isFinite(playerState) ? playerState !== 1 : mediaState.paused,
+          volume: Number.isFinite(Number(info.volume)) ? Number(info.volume) / 100 : mediaState.volume,
+          ended: playerState === 0
+        };
+        mediaState = { ...mediaState, ...nextState };
+        updateControls();
+        if (mediaState.ended) advanceTrack(1);
+      }
+      if (playerMessage?.event === 'onStateChange') {
+        const playerState = Number(playerMessage.info);
+        if (Number.isFinite(playerState)) {
+          mediaState = { ...mediaState, paused: playerState !== 1, ended: playerState === 0 };
+          updateControls();
+          if (playerState === 0) advanceTrack(1);
+        }
+      }
+      return;
+    }
+
     if (event.source === musicFrame?.contentWindow && event.data?.type === 'antarctic:relay-media-ready') {
       if (playerStatus) playerStatus.textContent = 'Ready to play';
       if (autoPlayWhenReady) {
@@ -1960,6 +2081,29 @@ window.addEventListener('message', (event) => {
     return;
   }
 
+  if (metadata.type === 'antarctic:relay-error') {
+    const frame = document.getElementById('game-sandbox-frame');
+    if (!frame || event.source !== frame.contentWindow || !frame.__antarcticRelayTarget) return;
+    const failedBackend = frame.__antarcticRelayBackend || appSettings.relayBackend;
+    const fallbackBackend = alternateRelayBackend(failedBackend);
+    if (frame.__antarcticRelayFallbackAttempted) {
+      setRelaySessionNotice(frame, `${failedBackend} and ${fallbackBackend} could not load this page. ${metadata.message || 'Try again later.'}`, true);
+      return;
+    }
+
+    frame.__antarcticRelayFallbackAttempted = true;
+    setRelaySessionNotice(frame, `${failedBackend} could not load this page. Trying ${fallbackBackend}…`);
+    createRelaySessionUrl({ backend: fallbackBackend, url: frame.__antarcticRelayTarget })
+      .then(relayUrl => {
+        frame.__antarcticRelayBackend = fallbackBackend;
+        frame.src = relayUrl;
+      })
+      .catch(error => {
+        setRelaySessionNotice(frame, `${failedBackend} and ${fallbackBackend} failed: ${error.message}`, true);
+      });
+    return;
+  }
+
   if (metadata.type !== 'antarctic:page-metadata') return;
 
   const frame = document.getElementById('game-sandbox-frame');
@@ -2002,6 +2146,18 @@ if (backButton) {
 if (forwardButton) {
   forwardButton.addEventListener('click', () => { navigateHistory(1); });
 }
+
+document.addEventListener('keydown', event => {
+  if (!(event.metaKey || event.ctrlKey)) return;
+  if (event.key === '[') {
+    event.preventDefault();
+    navigateHistory(-1);
+  }
+  if (event.key === ']') {
+    event.preventDefault();
+    navigateHistory(1);
+  }
+});
 
 if (reloadButton) {
   reloadButton.addEventListener('click', () => {

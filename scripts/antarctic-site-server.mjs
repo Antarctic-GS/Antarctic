@@ -16,6 +16,7 @@ const tlsKey = process.env.ANTARCTIC_TLS_KEY;
 const hmacSecret = process.env.ALTCHA_HMAC_SECRET ?? 'local-development-secret-change-me';
 const challengeCost = Number(process.env.ALTCHA_COST ?? 5_000);
 const relaySessionTtlMs = 30 * 60 * 1000;
+const maxRelayTargetLength = 8192;
 const relaySessions = new Map();
 
 const contentTypes = {
@@ -95,13 +96,8 @@ function serializeInlineConfig(value) {
     .replaceAll('&', '\\u0026');
 }
 
-async function renderRelaySession(session) {
-  const targetQuery = new URLSearchParams({
-    backend: session.backend,
-    embed: '1',
-    url: session.target
-  }).toString();
-  const frameSource = `/assets/relay/?${targetQuery}`;
+async function renderRelaySession(sessionId) {
+  const frameSource = `/assets/relay/?embed=1&session=${encodeURIComponent(sessionId)}`;
   const frameSourceJson = serializeInlineConfig(frameSource);
 
   return `<!doctype html>
@@ -110,6 +106,7 @@ async function renderRelaySession(session) {
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
     <title>Antarctic relay</title>
+    <meta http-equiv="Content-Security-Policy" content="default-src 'none'; frame-src 'self'; script-src 'self' 'unsafe-inline'; style-src 'unsafe-inline'; connect-src 'self' ws: wss:; base-uri 'none'; form-action 'none'; frame-ancestors 'self'; object-src 'none'">
     <style>
       :root, body, #relay-session-frame { width: 100%; height: 100%; }
       html, body { margin: 0; overflow: hidden; background: #081426; }
@@ -117,17 +114,21 @@ async function renderRelaySession(session) {
     </style>
   </head>
   <body>
-    <iframe id="relay-session-frame" title="Antarctic relay" allow="autoplay; encrypted-media; picture-in-picture" allowfullscreen></iframe>
+    <iframe id="relay-session-frame" title="Antarctic relay" referrerpolicy="no-referrer" allow="autoplay; encrypted-media; picture-in-picture" allowfullscreen></iframe>
     <script>
       const parentWindow = window.parent;
       const relayFrame = document.getElementById('relay-session-frame');
       relayFrame.src = ${frameSourceJson};
+      const relayToParentMessages = new Set(['antarctic:relay-ready', 'antarctic:relay-error', 'antarctic:relay-media-ready', 'antarctic:relay-media-state', 'antarctic:relay-search-results', 'antarctic:page-metadata']);
+      const parentToRelayMessages = new Set(['antarctic:relay-navigate', 'antarctic:relay-media-command', 'antarctic:relay-search']);
       window.addEventListener('message', (event) => {
         if (event.source === relayFrame.contentWindow) {
+          if (event.origin !== location.origin || !relayToParentMessages.has(event.data?.type)) return;
           parentWindow.postMessage(event.data, event.origin);
           return;
         }
         if (event.source === parentWindow) {
+          if (event.origin !== location.origin || !parentToRelayMessages.has(event.data?.type)) return;
           relayFrame.contentWindow?.postMessage(event.data, event.origin);
         }
       });
@@ -334,22 +335,45 @@ async function handleRequest(request, response) {
         return;
       }
 
-      if (!['http:', 'https:'].includes(targetUrl.protocol)) {
+      if (!['http:', 'https:'].includes(targetUrl.protocol)
+        || targetUrl.username
+        || targetUrl.password
+        || target.length > maxRelayTargetLength) {
         sendJson(response, 400, { error: 'Relay targets must use HTTP or HTTPS.' });
         return;
       }
 
       const id = createRelaySession(backend, targetUrl.href);
       sendJson(response, 201, {
-        backend,
         id,
-        path: `/relay/${id}`,
-        url: targetUrl.href
+        path: `/relay/${id}`
       });
     } catch (error) {
       console.error('Unable to create relay session:', error);
       sendJson(response, 400, { error: 'Unable to create a relay session.' });
     }
+    return;
+  }
+
+  const relayBootstrapMatch = url.pathname.match(/^\/api\/relay\/session\/([A-Za-z0-9_.-]+)$/);
+  if (relayBootstrapMatch) {
+    if (request.method !== 'GET') {
+      sendJson(response, 405, { error: 'Use GET for a relay session bootstrap.' });
+      return;
+    }
+
+    removeExpiredRelaySessions();
+    const session = relaySessions.get(relayBootstrapMatch[1])
+      || decodeRelayLinkSession(relayBootstrapMatch[1]);
+    if (!session) {
+      sendJson(response, 404, { error: 'Relay session not found or expired.' });
+      return;
+    }
+
+    sendJson(response, 200, {
+      backend: session.backend,
+      target: session.target
+    });
     return;
   }
 
@@ -361,14 +385,15 @@ async function handleRequest(request, response) {
     }
 
     removeExpiredRelaySessions();
-    const session = relaySessions.get(relaySessionMatch[1]) || decodeRelayLinkSession(relaySessionMatch[1]);
+    const sessionId = relaySessionMatch[1];
+    const session = relaySessions.get(sessionId) || decodeRelayLinkSession(sessionId);
     if (!session) {
       sendJson(response, 404, { error: 'Relay session not found or expired.' });
       return;
     }
 
     try {
-      const body = await renderRelaySession(session);
+      const body = await renderRelaySession(sessionId);
       response.writeHead(200, {
         'Cache-Control': 'no-store',
         'Content-Length': Buffer.byteLength(body),
@@ -505,10 +530,22 @@ async function handleRequest(request, response) {
 
   const contentType = contentTypes[extname(filePath).toLowerCase()] ?? 'application/octet-stream';
   const stats = await fs.stat(filePath);
+  const etag = `"${stats.size.toString(16)}-${Math.trunc(stats.mtimeMs).toString(16)}"`;
+  if (request.headers['if-none-match'] === etag) {
+    response.writeHead(304, {
+      'Cache-Control': 'no-cache',
+      ETag: etag,
+      'Referrer-Policy': 'no-referrer'
+    });
+    response.end();
+    return;
+  }
   const headers = {
     'Cache-Control': 'no-cache',
     'Content-Length': stats.size,
-    'Content-Type': contentType
+    'Content-Type': contentType,
+    ETag: etag,
+    'Referrer-Policy': 'no-referrer'
   };
   if (filePath === resolve(rootDirectory, 'assets/relay/sw.js')) {
     headers['Service-Worker-Allowed'] = '/';

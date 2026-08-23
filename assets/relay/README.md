@@ -13,6 +13,9 @@ transport, and uses the archive at
 The default Wisp endpoint is `wss://wisp.mercurywork.shop/`; override it with
 a `wisp` query parameter when deploying a private endpoint, for example
 `assets/relay/?wisp=wss%3A%2F%2Fproxy.example%2Fwisp%2F`.
+Only `ws:` and `wss:` endpoints are accepted. Both relay startup paths have a
+15-second transport/controller timeout, and Scramjet's worker URL is
+cache-busted so a new relay build does not remain attached to an old worker.
 
 Service workers require HTTPS in production (localhost is allowed for local testing). The controller and transport bundles are vendored beside the existing Scramjet package so the relay does not depend on a build step or CDN at runtime.
 
@@ -23,6 +26,10 @@ as `{ "backend": "scramjet", "url": "https://example.com/" }`. It returns a
 short-lived `/relay/<random-id>` route. That route serves the relay shell with
 the target and backend kept in the server-side session, so external pages and
 music embeds do not expose the target URL in an `/assets/relay/` iframe URL.
+The session shell bootstraps its target over same-origin
+`/api/relay/session/<id>` and the embedded frames use `no-referrer`, so the
+remote target is not carried in the visible relay frame URL or as an Antarctic
+page referrer.
 
 Antarctic prewarms a hidden embedded Scramjet relay when the site loads. The
 visible external-navigation frame uses the short-lived `/relay/<random-id>`
@@ -38,6 +45,12 @@ remote destination remains attached as metadata for the trusted click handler
 used by the active relay backend. UV's URL rewriter explicitly allows the
 Antarctic protocol through so it cannot turn the token back into a backend
 encoded URL.
+Rewriting is limited to HTML responses and reads a clone, preserving binary,
+JSON, and no-head responses for the browser. A document-level backend failure
+now renders a small Antarctic error page with the backend and target instead
+of leaving the frame on an unhelpful blank network error.
+Known proxy implementation headers are removed from relay responses while
+cookies and normal site headers remain available to the proxied page.
 
 YouTube embed targets also expose a small parent-window media bridge for the
 custom Antarctic Music player. The parent can send
@@ -56,8 +69,11 @@ The local site server also exposes `GET /api/music/search?q=...`. The music page
 uses this endpoint for result discovery and keeps the selected video playback
 inside the configured relay backend.
 
-YouTube playback uses the same relay backend selected in Antarctic Settings;
-there is no music-specific backend override.
+Music discovery still follows the relay backend selected in Antarctic
+Settings. Playback uses a privacy-enhanced YouTube iframe directly because
+YouTube's anti-abuse `GenerateIT` request does not reliably complete through
+Wisp/Scramjet/Ultraviolet; the custom dock controls that direct player and no
+longer leaves tracks frozen at `0:00` because of a relay-only request failure.
 
 For loopback development only, the bundled Epoxy transport disables certificate
 validation for `localhost`/`127.0.0.1` Wisp endpoints. Public Wisp endpoints keep

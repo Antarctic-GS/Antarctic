@@ -3,6 +3,7 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; connect-src 'self' ws: wss:; frame-src 'self'; worker-src 'self' blob:; img-src 'self' data:; object-src 'none'; base-uri 'none'; form-action 'none';">
   <title>Antarctic Relay</title>
   <style>
     :root { color-scheme: dark; font-family: system-ui, sans-serif; }
@@ -125,7 +126,7 @@
         <div class="relay-progress" aria-hidden="true"><span></span></div>
       </section>
     </div>
-    <iframe id="relay-frame" title="Antarctic relay" allow="autoplay; encrypted-media; picture-in-picture" allowfullscreen></iframe>
+    <iframe id="relay-frame" title="Antarctic relay" referrerpolicy="no-referrer" allow="autoplay; encrypted-media; picture-in-picture" allowfullscreen></iframe>
   </main>
 
   <script defer src="./app.js?antarctic-media-fix=22"></script>
