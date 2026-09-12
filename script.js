@@ -746,6 +746,11 @@ function updateViewportContent(url, actualFilePath = null) {
     return;
   }
 
+  if (routeKey === 'vm') {
+    updateViewportContent('https://developer.puter.com/labs/firefox-wasm/', 'https://developer.puter.com/labs/firefox-wasm/');
+    return;
+  }
+
   if (routeKey === 'emulators') {
     fetch('emulators.html')
       .then(response => {
