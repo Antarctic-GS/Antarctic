@@ -1,0 +1,62 @@
+<style>
+  .terms-page { min-height: 100%; padding: 24px; color: var(--text-main); font-family: var(--font-primary); }
+  .terms-header, .terms-document { width: min(100%, 900px); margin: 0 auto; }
+  .terms-header { margin-bottom: 18px; }
+  .terms-eyebrow { margin-bottom: 8px; color: #7dd3fc; font-size: 11px; font-weight: 700; letter-spacing: 2px; text-transform: uppercase; }
+  .terms-title { margin: 0; color: #f8fafc; font-size: clamp(28px, 4vw, 42px); line-height: 1.05; letter-spacing: -1.5px; }
+  .terms-meta { margin-top: 12px; color: #94a3b8; font-size: 12px; line-height: 1.6; }
+  .terms-document { box-sizing: border-box; padding: 24px; border: 1px solid rgba(148, 163, 184, .14); border-radius: 16px; background: linear-gradient(145deg, rgba(255, 255, 255, .09), rgba(15, 23, 42, .32)); box-shadow: inset 0 1px rgba(255, 255, 255, .08), 0 14px 34px rgba(2, 6, 23, .2); backdrop-filter: blur(12px); }
+  .terms-markdown { margin: 0; color: #cbd5e1; font-size: 13px; line-height: 1.7; }
+  .terms-markdown h2 { margin: 28px 0 10px; color: #e0f2fe; font-size: 18px; line-height: 1.25; }
+  .terms-markdown h2:first-child { margin-top: 0; }
+  .terms-markdown p { margin: 0 0 14px; }
+  .terms-markdown ul { margin: -2px 0 14px 22px; padding: 0; }
+  .terms-markdown li { margin: 4px 0; padding-left: 4px; }
+  .terms-markdown a { color: #7dd3fc; }
+  @media (max-width: 680px) { .terms-page { padding: 24px 18px; } .terms-document { padding: 18px; } }
+</style>
+
+<section class="terms-page" aria-labelledby="privacy-title">
+  <header class="terms-header">
+    <div class="terms-eyebrow">Antarctic Games</div>
+    <h1 id="privacy-title" class="terms-title">Privacy Policy</h1>
+    <div class="terms-meta">Last Updated / Effective Date: August 27, 2026<br>Document Version: 2026-08-27</div>
+  </header>
+
+  <article class="terms-document">
+    <div class="terms-markdown">
+      <h2>1. Scope</h2>
+      <p>This Privacy Policy explains what Antarctic Games processes when you use the website, games, relay services, and music features.</p>
+
+      <h2>2. Information stored on your device</h2>
+      <ul>
+        <li>Settings such as motion preferences, relay backend selection, sidebar state, and tab restoration preferences.</li>
+        <li>Saved tabs, navigation history, and the locally saved music queue when those features are enabled.</li>
+        <li>A local acknowledgment that you completed the access checkpoint for the current Terms version.</li>
+      </ul>
+      <p>This information is stored in your browser’s local or session storage. It is not an Antarctic account and is not submitted to us as a profile.</p>
+
+      <h2>3. Relay sessions</h2>
+      <p>When you open an external site through the relay, the server temporarily stores the selected relay backend and target URL in memory so it can create the relay shell. Sessions expire after 30 minutes and are bounded to prevent unbounded memory growth.</p>
+      <p>The relay may process requests, cookies, and content needed to display the selected third-party site. Third-party sites remain responsible for their own data practices and may receive information directly from your browser or through the relay.</p>
+
+      <h2>4. Human-check and access token</h2>
+      <p>The access checkpoint uses a locally served Altcha widget. The server creates and verifies the proof-of-work challenge. After successful verification, the server gives your browser a short-lived, HttpOnly access cookie so protected relay and music endpoints can reject unauthenticated requests.</p>
+
+      <h2>5. Music search</h2>
+      <p>Music searches are sent to Antarctic’s server and forwarded to YouTube to retrieve publicly available search results. Search terms may therefore be visible to YouTube under YouTube’s policies. Antarctic does not create a music account or store a search history on the server.</p>
+
+      <h2>6. Logs and hosting</h2>
+      <p>Antarctic’s hosting provider, reverse proxy, or operating system may create ordinary technical logs such as request timestamps, IP addresses, user agents, and error information. Those logs are controlled by the hosting environment, retained according to its configuration, and used for security, reliability, and abuse prevention.</p>
+
+      <h2>7. Third-party content</h2>
+      <p>Games, applications, media, and websites linked or displayed through Antarctic may use their own cookies, storage, analytics, advertising, and tracking technologies. Review the privacy policies of those services before using them.</p>
+
+      <h2>8. Your choices</h2>
+      <p>You can clear Antarctic’s locally stored data from Settings → Privacy &amp; legal. You can also block cookies or storage in your browser, though some features may stop working. Clearing local data does not remove records held by third-party sites or the hosting environment.</p>
+
+      <h2>9. Contact</h2>
+      <p>Privacy questions or requests can be submitted through the <a href="https://github.com/Antarctic-GS/Antarctic/issues">Antarctic Games support issues</a>.</p>
+    </div>
+  </article>
+</section>

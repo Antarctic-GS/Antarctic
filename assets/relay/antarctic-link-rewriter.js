@@ -41,11 +41,26 @@
       }
     };
 
-    rewriteLinks(document);
-    new MutationObserver(() => rewriteLinks(document)).observe(document.documentElement || document, {
-      childList: true,
-      subtree: true,
-    });
+    const installObserver = () => {
+      rewriteLinks(document);
+      const root = document.documentElement;
+      if (!root || typeof root.nodeType !== "number") return;
+      try {
+        new MutationObserver(() => rewriteLinks(document)).observe(root, {
+          childList: true,
+          subtree: true,
+        });
+      } catch {
+        // Some relay runtimes expose a wrapped DOM that cannot be observed.
+        // Initial rewriting still works, and the page remains usable.
+      }
+    };
+
+    if (document.readyState === "loading") {
+      document.addEventListener("DOMContentLoaded", installObserver, { once: true });
+    } else {
+      installObserver();
+    }
   };
 
   self.antarcticLinkRewriterSource = (backend) => `(${install.toString()})(${JSON.stringify(backend)})`;

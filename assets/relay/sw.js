@@ -11,6 +11,8 @@ self.addEventListener("activate", (event) => {
 self.antarcticInjectLinkRewriter = async (response) => {
   if (!response?.body || !self.antarcticRelayIsHtmlResponse(response)) return response;
 
+  const contentType = response.headers.get("content-type") || "";
+  if (!/text\/html|application\/xhtml\+xml/i.test(contentType)) return response;
   const body = await response.clone().text();
   if (!/<head[\s>]/i.test(body) || body.includes("data-antarctic-link-rewriter")) {
     return response;

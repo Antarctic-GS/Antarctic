@@ -148,7 +148,7 @@ Depending on how the Service is configured, this may include information such as
 
 ### 7.2
 
-Our actual data practices are described in the Antarctic Privacy Policy.
+Our actual data practices are described in the [Antarctic Privacy Policy](privacy.html).
 
 ### 7.3
 
@@ -156,7 +156,7 @@ You should not submit sensitive personal information to Antarctic unless the Ser
 
 ### 7.4
 
-We may retain technical information for as long as reasonably necessary for security, legal, operational, or other legitimate purposes, subject to applicable law and our Privacy Policy.
+We may retain technical information for as long as reasonably necessary for security, legal, operational, or other legitimate purposes, subject to applicable law and our [Privacy Policy](privacy.html).
 
 ## 8. No Accounts
 
@@ -294,14 +294,14 @@ Our failure to enforce any provision of these Terms does not constitute a waiver
 
 ## 20. Entire Agreement
 
-These Terms, together with the Antarctic Privacy Policy and any other policies expressly incorporated into these Terms, constitute the agreement governing your use of the Service, except where additional terms expressly apply to a specific feature.
+These Terms, together with the [Antarctic Privacy Policy](privacy.html) and any other policies expressly incorporated into these Terms, constitute the agreement governing your use of the Service, except where additional terms expressly apply to a specific feature.
 
 ## 21. Contact
 
 Questions regarding these Terms may be directed to:
 
 **Antarctic Games**  
-**Email:** [YOUR EMAIL]
+**GitHub Issues:** [Antarctic Games support](https://github.com/Antarctic-GS/Antarctic/issues)
 
 ## 22. Acceptance
 

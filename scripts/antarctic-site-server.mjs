@@ -5,9 +5,15 @@ import { createServer as createHttpsServer } from 'node:https';
 import { randomBytes } from 'node:crypto';
 import { extname, join, normalize, relative, resolve } from 'node:path';
 import process from 'node:process';
+import { pathToFileURL } from 'node:url';
 
-import { createChallenge, randomInt, verifySolution } from '../assets/relay/package/node_modules/altcha-lib/dist/esm/v2/index.js';
-import { deriveKey } from '../assets/relay/package/node_modules/altcha-lib/dist/esm/v2/algorithms/pbkdf2.js';
+import {
+  ACCESS_TOKEN_TTL_MS,
+  createAccessToken,
+  createRateLimiter,
+  getCookie,
+  isValidAccessToken
+} from './antarctic-security.mjs';
 
 const rootDirectory = resolve(process.env.ANTARCTIC_SITE_ROOT ?? process.cwd());
 const port = Number(process.env.ANTARCTIC_SITE_PORT ?? 3000);
@@ -17,7 +23,29 @@ const hmacSecret = process.env.ALTCHA_HMAC_SECRET ?? 'local-development-secret-c
 const challengeCost = Number(process.env.ALTCHA_COST ?? 5_000);
 const relaySessionTtlMs = 30 * 60 * 1000;
 const maxRelayTargetLength = 8192;
+const maxRelaySessions = 10_000;
+const accessCookieName = 'antarctic_access';
 const relaySessions = new Map();
+const rateLimiter = createRateLimiter();
+const rateLimits = {
+  challenge: 10,
+  music: 20,
+  relay: 30,
+  verify: 20
+};
+
+let altchaModulePromise;
+
+async function getAltchaModule() {
+  if (!altchaModulePromise) {
+    const moduleRoot = resolve(rootDirectory, 'assets/relay/package/node_modules/altcha-lib/dist/esm');
+    altchaModulePromise = Promise.all([
+      import(pathToFileURL(join(moduleRoot, 'v2/index.js')).href),
+      import(pathToFileURL(join(moduleRoot, 'v2/algorithms/pbkdf2.js')).href)
+    ]).then(([altcha, algorithms]) => ({ ...altcha, deriveKey: algorithms.deriveKey }));
+  }
+  return altchaModulePromise;
+}
 
 const contentTypes = {
   '.css': 'text/css; charset=utf-8',
@@ -36,15 +64,47 @@ const contentTypes = {
   '.woff2': 'font/woff2'
 };
 
-function sendJson(response, statusCode, payload) {
+function sendJson(response, statusCode, payload, extraHeaders = {}) {
   const body = JSON.stringify(payload);
   response.writeHead(statusCode, {
-    'Access-Control-Allow-Origin': '*',
     'Cache-Control': 'no-store',
     'Content-Length': Buffer.byteLength(body),
-    'Content-Type': 'application/json; charset=utf-8'
+    'Content-Type': 'application/json; charset=utf-8',
+    ...extraHeaders
   });
   response.end(body);
+}
+
+function clientAddress(request) {
+  const forwarded = request.headers['x-forwarded-for'];
+  if (typeof forwarded === 'string' && forwarded.trim()) return forwarded.split(',')[0].trim();
+  return request.socket.remoteAddress || 'unknown';
+}
+
+function rejectRateLimited(request, response, bucketName) {
+  const result = rateLimiter.check(`${bucketName}:${clientAddress(request)}`, rateLimits[bucketName]);
+  if (result.allowed) return false;
+
+  sendJson(response, 429, { error: 'Too many requests. Please try again later.' }, {
+    'Retry-After': String(result.retryAfterSeconds)
+  });
+  return true;
+}
+
+function hasAccess(request) {
+  return isValidAccessToken(getCookie(request, accessCookieName), hmacSecret);
+}
+
+function requireAccess(request, response) {
+  if (hasAccess(request)) return true;
+  sendJson(response, 403, { error: 'Complete the Antarctic human check before using this feature.' });
+  return false;
+}
+
+function accessCookieHeader(request) {
+  const secure = request.socket.encrypted ? '; Secure' : '';
+  const token = createAccessToken(hmacSecret, ACCESS_TOKEN_TTL_MS);
+  return `${accessCookieName}=${token}; Max-Age=${Math.floor(ACCESS_TOKEN_TTL_MS / 1000)}; HttpOnly; SameSite=Lax; Path=/${secure}`;
 }
 
 function removeExpiredRelaySessions() {
@@ -56,6 +116,10 @@ function removeExpiredRelaySessions() {
 
 function createRelaySession(backend, target) {
   removeExpiredRelaySessions();
+  if (relaySessions.size >= maxRelaySessions) {
+    const oldest = relaySessions.keys().next().value;
+    if (oldest) relaySessions.delete(oldest);
+  }
   let id;
   do {
     id = randomBytes(18).toString('base64url');
@@ -138,6 +202,7 @@ async function renderRelaySession(sessionId) {
 }
 
 async function createAltchaChallenge() {
+  const { createChallenge, deriveKey, randomInt } = await getAltchaModule();
   return createChallenge({
     algorithm: 'PBKDF2/SHA-256',
     cost: challengeCost,
@@ -306,8 +371,7 @@ async function handleRequest(request, response) {
     if (request.method === 'OPTIONS') {
       response.writeHead(204, {
         'Access-Control-Allow-Headers': 'Content-Type',
-        'Access-Control-Allow-Methods': 'POST, OPTIONS',
-        'Access-Control-Allow-Origin': '*'
+        'Access-Control-Allow-Methods': 'POST, OPTIONS'
       });
       response.end();
       return;
@@ -317,6 +381,8 @@ async function handleRequest(request, response) {
       sendJson(response, 405, { error: 'Use POST to create a relay session.' });
       return;
     }
+
+    if (rejectRateLimited(request, response, 'relay') || !requireAccess(request, response)) return;
 
     try {
       const body = await readJsonBody(request);
@@ -384,6 +450,8 @@ async function handleRequest(request, response) {
       return;
     }
 
+    if (!requireAccess(request, response)) return;
+
     removeExpiredRelaySessions();
     const sessionId = relaySessionMatch[1];
     const session = relaySessions.get(sessionId) || decodeRelayLinkSession(sessionId);
@@ -415,8 +483,7 @@ async function handleRequest(request, response) {
     if (request.method === 'OPTIONS') {
       response.writeHead(204, {
         'Access-Control-Allow-Headers': 'Content-Type',
-        'Access-Control-Allow-Methods': 'GET, OPTIONS',
-        'Access-Control-Allow-Origin': '*'
+        'Access-Control-Allow-Methods': 'GET, OPTIONS'
       });
       response.end();
       return;
@@ -426,6 +493,8 @@ async function handleRequest(request, response) {
       sendJson(response, 405, { error: 'Use GET for a challenge.' });
       return;
     }
+
+    if (rejectRateLimited(request, response, 'challenge')) return;
 
     try {
       sendJson(response, 200, await createAltchaChallenge());
@@ -440,8 +509,7 @@ async function handleRequest(request, response) {
     if (request.method === 'OPTIONS') {
       response.writeHead(204, {
         'Access-Control-Allow-Headers': 'Content-Type',
-        'Access-Control-Allow-Methods': 'GET, OPTIONS',
-        'Access-Control-Allow-Origin': '*'
+        'Access-Control-Allow-Methods': 'GET, OPTIONS'
       });
       response.end();
       return;
@@ -452,9 +520,15 @@ async function handleRequest(request, response) {
       return;
     }
 
+    if (rejectRateLimited(request, response, 'music') || !requireAccess(request, response)) return;
+
     const query = url.searchParams.get('q')?.trim();
     if (!query) {
       sendJson(response, 400, { error: 'A search query is required.' });
+      return;
+    }
+    if (query.length > 200) {
+      sendJson(response, 400, { error: 'Search queries must be 200 characters or fewer.' });
       return;
     }
 
@@ -471,8 +545,7 @@ async function handleRequest(request, response) {
     if (request.method === 'OPTIONS') {
       response.writeHead(204, {
         'Access-Control-Allow-Headers': 'Content-Type',
-        'Access-Control-Allow-Methods': 'POST, OPTIONS',
-        'Access-Control-Allow-Origin': '*'
+        'Access-Control-Allow-Methods': 'POST, OPTIONS'
       });
       response.end();
       return;
@@ -482,6 +555,8 @@ async function handleRequest(request, response) {
       sendJson(response, 405, { error: 'Use POST to verify a solution.' });
       return;
     }
+
+    if (rejectRateLimited(request, response, 'verify')) return;
 
     try {
       const body = await readJsonBody(request);
@@ -496,6 +571,7 @@ async function handleRequest(request, response) {
         return;
       }
 
+      const { deriveKey, verifySolution } = await getAltchaModule();
       const result = await verifySolution({
         challenge: payload.challenge,
         deriveKey,
@@ -503,7 +579,9 @@ async function handleRequest(request, response) {
         solution: payload.solution
       });
 
-      sendJson(response, 200, { verified: result.verified });
+      sendJson(response, 200, { verified: result.verified }, result.verified
+        ? { 'Set-Cookie': accessCookieHeader(request) }
+        : undefined);
     } catch (error) {
       console.error('Unable to verify the Altcha solution:', error);
       sendJson(response, 400, { error: 'Unable to verify the CAPTCHA solution.' });

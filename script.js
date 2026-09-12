@@ -6,7 +6,8 @@ const HOME_PAGE = 'antarctic://newtab';
 const LAUNCHER_PAGE = 'antarctic://launcher';
 const TAB_STORAGE_KEY = 'antarctic.tab-state.v1';
 const SETTINGS_STORAGE_KEY = 'antarctic.settings.v1';
-const ACCESS_GATE_STORAGE_KEY = 'antarctic.access-accepted.v1';
+const ACCESS_GATE_STORAGE_KEY = 'antarctic.access-accepted.v2';
+const ACCESS_TERMS_VERSION = '2026-08-16';
 const SIDEBAR_STORAGE_KEY = 'antarctic.sidebar-state.v1';
 const MAX_TAB_HISTORY_ENTRIES = 50;
 
@@ -156,6 +157,22 @@ function initializeAccessGate() {
   const captchaWidget = document.getElementById('access-captcha');
   if (!gate || !agreement || !continueButton) return;
 
+  const focusableSelector = 'button:not([disabled]), input:not([disabled]), a[href], [tabindex]:not([tabindex="-1"])';
+  const trapFocus = (container, event) => {
+    if (event.key !== 'Tab') return;
+    const focusable = [...container.querySelectorAll(focusableSelector)].filter(element => element.offsetParent !== null);
+    if (focusable.length === 0) return;
+    const first = focusable[0];
+    const last = focusable[focusable.length - 1];
+    if (event.shiftKey && document.activeElement === first) {
+      event.preventDefault();
+      last.focus();
+    } else if (!event.shiftKey && document.activeElement === last) {
+      event.preventDefault();
+      first.focus();
+    }
+  };
+
   const captchaChallenge = window.ANTARCTIC_CAPTCHA_CONFIG?.challenge;
   const captchaVerify = window.ANTARCTIC_CAPTCHA_CONFIG?.verify;
   if (captchaWidget && captchaChallenge) {
@@ -185,6 +202,14 @@ function initializeAccessGate() {
     termsLink?.focus();
   };
 
+  termsModal?.addEventListener('keydown', event => {
+    if (event.key === 'Escape') {
+      event.preventDefault();
+      closeTermsModal();
+      return;
+    }
+    trapFocus(termsModal, event);
+  });
   termsModalExit?.addEventListener('click', closeTermsModal);
   termsLink?.addEventListener('click', event => {
     event.preventDefault();
@@ -208,7 +233,7 @@ function initializeAccessGate() {
 
   let accepted = false;
   try {
-    accepted = localStorage.getItem(ACCESS_GATE_STORAGE_KEY) === 'accepted';
+    accepted = localStorage.getItem(ACCESS_GATE_STORAGE_KEY) === ACCESS_TERMS_VERSION;
   } catch (error) {
     // Restricted storage keeps the checkpoint visible for the current session.
   }
@@ -218,6 +243,16 @@ function initializeAccessGate() {
     return;
   }
 
+  gate.addEventListener('keydown', event => {
+    if (event.key === 'Escape') {
+      event.preventDefault();
+      agreement.focus();
+      return;
+    }
+    trapFocus(gate, event);
+  });
+  window.setTimeout(() => agreement.focus(), 0);
+
   agreement.addEventListener('change', () => {
     updateContinueState();
   });
@@ -225,7 +260,7 @@ function initializeAccessGate() {
   continueButton.addEventListener('click', () => {
     if (!agreement.checked || !captchaIsVerified()) return;
     try {
-      localStorage.setItem(ACCESS_GATE_STORAGE_KEY, 'accepted');
+      localStorage.setItem(ACCESS_GATE_STORAGE_KEY, ACCESS_TERMS_VERSION);
     } catch (error) {
       // The gate can still be dismissed for this session when storage is blocked.
     }
@@ -719,6 +754,22 @@ function updateViewportContent(url, actualFilePath = null) {
             <p style="color: #64748b; font-size: 13px; font-family: monospace;">${err.message}</p>
           </div>
         `;
+      });
+    return;
+  }
+
+  if (routeKey === 'privacy') {
+    fetch('privacy.html')
+      .then(response => {
+        if (!response.ok) throw new Error(`Privacy Policy unavailable (${response.status})`);
+        return response.text();
+      })
+      .then(htmlContent => {
+        viewport.innerHTML = htmlContent;
+      })
+      .catch(err => {
+        console.error(err);
+        viewport.innerHTML = `<div style="text-align:center;padding:60px 20px;color:#ef4444;"><h2>Failed to load Privacy Policy</h2><p>${err.message}</p></div>`;
       });
     return;
   }
@@ -1758,6 +1809,7 @@ function initializeSettingsPortalEngine() {
   const clearData = document.getElementById('settingsClearData');
   const notice = document.getElementById('settingsNotice');
   const termsLink = document.getElementById('settingsTermsLink');
+  const privacyLink = document.getElementById('settingsPrivacyLink');
 
   const activateSettingsCategory = (category, moveFocus = false) => {
     categoryTabs.forEach(tab => {
@@ -1839,6 +1891,10 @@ function initializeSettingsPortalEngine() {
 
   if (termsLink) {
     termsLink.addEventListener('click', () => navigateInline('terms'));
+  }
+
+  if (privacyLink) {
+    privacyLink.addEventListener('click', () => navigateInline('privacy'));
   }
 
   if (clearTabs) {
