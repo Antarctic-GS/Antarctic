@@ -3,6 +3,10 @@
 Antarctic is a static game launcher with optional relay, music-search, and
 Altcha human-check services.
 
+The sidebar also includes a VM shortcut to Puter’s Firefox-in-WebAssembly lab
+and an Emulators launcher powered by EmulatorJS’s stable CDN. The emulator
+launcher accepts a locally selected ROM and does not bundle game files.
+
 ## Local development
 
 Run the complete local stack from the repository root:

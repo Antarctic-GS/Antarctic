@@ -736,6 +736,28 @@ function updateViewportContent(url, actualFilePath = null) {
     return;
   }
 
+  if (routeKey === 'emulators') {
+    fetch('emulators.html')
+      .then(response => {
+        if (!response.ok) throw new Error(`Emulator launcher unavailable (${response.status})`);
+        return response.text();
+      })
+      .then(htmlContent => {
+        viewport.innerHTML = htmlContent;
+        initializeEmulatorsPortalEngine();
+      })
+      .catch(err => {
+        console.error(err);
+        viewport.innerHTML = `
+          <div style="text-align: center; padding: 60px 20px; color: #ef4444; font-family: 'Saira', sans-serif;">
+            <h2 style="font-size: 18px; margin-bottom: 8px;">Failed to load emulator launcher</h2>
+            <p style="color: #64748b; font-size: 13px; font-family: monospace;">${err.message}</p>
+          </div>
+        `;
+      });
+    return;
+  }
+
   if (routeKey === 'terms') {
     fetch('terms.html')
       .then(response => {
@@ -914,6 +936,44 @@ function injectLauncherOverlayDeck(targetFile, openTarget = targetFile) {
 // =========================================================================
 // 5. SUB-PAGE ENGINE: DYNAMIC GAMES PORTAL INITIALIZER
 // =========================================================================
+function initializeEmulatorsPortalEngine() {
+  const emulatorRoot = document.getElementById('emulator-portal');
+  const romInput = document.getElementById('emulator-rom');
+  const systemSelect = document.getElementById('emulator-system');
+  const player = document.getElementById('emulator-player');
+  const status = document.getElementById('emulator-status');
+  if (!emulatorRoot || !romInput || !systemSelect || !player || !status) return;
+
+  let romUrl = null;
+
+  const loadEmulator = () => {
+    const rom = romInput.files?.[0];
+    if (!rom) {
+      status.textContent = 'Choose a legally obtained ROM to start an emulator.';
+      return;
+    }
+
+    if (romUrl) URL.revokeObjectURL(romUrl);
+    romUrl = URL.createObjectURL(rom);
+    player.replaceChildren();
+    status.textContent = `Loading ${systemSelect.selectedOptions[0].textContent}…`;
+
+    window.EJS_player = '#emulator-player';
+    window.EJS_core = systemSelect.value;
+    window.EJS_gameUrl = romUrl;
+    window.EJS_pathtodata = 'https://cdn.emulatorjs.org/stable/data/';
+    window.EJS_startOnLoaded = true;
+
+    const loader = document.createElement('script');
+    loader.src = `${window.EJS_pathtodata}loader.js`;
+    loader.onload = () => { status.textContent = `${rom.name} is ready.`; };
+    loader.onerror = () => { status.textContent = 'EmulatorJS could not load. Check your connection and try again.'; };
+    emulatorRoot.appendChild(loader);
+  };
+
+  romInput.addEventListener('change', loadEmulator);
+}
+
 function compareDirectoryNames(left, right) {
   return String(left).localeCompare(String(right), undefined, {
     numeric: true,
@@ -2259,8 +2319,12 @@ if (bootUrlInput) {
 
 document.querySelectorAll('.grid-item').forEach(item => {
   item.addEventListener('click', () => {
-    const appLabel = item.querySelector('.grid-label').textContent.toLowerCase();
-    navigateInline(appLabel);
+    const destination = item.dataset.route || item.querySelector('.grid-label').textContent.toLowerCase();
+    if (/^https?:\/\//i.test(destination)) {
+      navigateLookup(destination);
+    } else {
+      navigateInline(destination);
+    }
   });
 });
 

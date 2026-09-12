@@ -1,0 +1,39 @@
+<section id="emulator-portal" class="emulator-portal">
+  <style>
+    .emulator-portal { min-height: 100%; padding: 28px; color: #e2e8f0; font-family: 'Saira', sans-serif; }
+    .emulator-header { max-width: 760px; margin: 0 auto 20px; }
+    .emulator-header h1 { margin: 0 0 8px; font-size: clamp(24px, 4vw, 36px); }
+    .emulator-header p { margin: 0; color: #94a3b8; line-height: 1.6; }
+    .emulator-controls { display: flex; flex-wrap: wrap; align-items: end; gap: 12px; max-width: 760px; margin: 0 auto 16px; padding: 16px; border: 1px solid rgba(148,163,184,.2); border-radius: 16px; background: rgba(15,23,42,.72); }
+    .emulator-field { display: grid; gap: 6px; color: #94a3b8; font-size: 11px; font-weight: 700; letter-spacing: .6px; text-transform: uppercase; }
+    .emulator-field select, .emulator-field input { min-height: 38px; border: 1px solid rgba(148,163,184,.28); border-radius: 9px; background: #0f172a; color: #e2e8f0; padding: 0 10px; font: inherit; }
+    .emulator-field input { padding: 8px 10px; }
+    .emulator-status { flex: 1 1 100%; min-height: 20px; color: #7dd3fc; font-size: 12px; }
+    .emulator-player { width: min(100%, 760px); min-height: 440px; margin: 0 auto; border: 1px solid rgba(148,163,184,.16); border-radius: 16px; background: #020617; overflow: hidden; }
+    .emulator-help { max-width: 760px; margin: 12px auto 0; color: #64748b; font-size: 11px; line-height: 1.5; }
+    @media (max-width: 600px) { .emulator-portal { padding: 18px; } .emulator-player { min-height: 320px; } }
+  </style>
+  <header class="emulator-header">
+    <h1>Emulators</h1>
+    <p>Run supported retro systems directly in Antarctic with EmulatorJS. Select a system, then choose a ROM from your device.</p>
+  </header>
+  <div class="emulator-controls">
+    <label class="emulator-field">System
+      <select id="emulator-system">
+        <option value="nes">NES / Famicom</option>
+        <option value="snes">SNES</option>
+        <option value="gb">Game Boy</option>
+        <option value="gba">Game Boy Advance</option>
+        <option value="n64">Nintendo 64</option>
+        <option value="genesis">Sega Genesis</option>
+        <option value="arcade">Arcade / MAME</option>
+      </select>
+    </label>
+    <label class="emulator-field">ROM file
+      <input id="emulator-rom" type="file" accept=".nes,.sfc,.smc,.gb,.gbc,.gba,.z64,.n64,.v64,.gen,.md,.bin,.zip">
+    </label>
+    <div id="emulator-status" class="emulator-status" role="status">Choose a legally obtained ROM to start an emulator.</div>
+  </div>
+  <div id="emulator-player" class="emulator-player"></div>
+  <p class="emulator-help">EmulatorJS loads its stable runtime from the official CDN. Antarctic does not provide ROM files; use only games you have the right to play.</p>
+</section>
