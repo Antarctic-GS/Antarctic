@@ -240,7 +240,17 @@ function initializeAccessGate() {
 
   if (accepted) {
     gate.hidden = true;
-    return;
+    fetch('/api/captcha/access', { credentials: 'same-origin', cache: 'no-store' })
+      .then(response => response.ok ? response.json() : { authorized: false })
+      .then(payload => {
+        if (payload?.authorized) return;
+        gate.hidden = false;
+        agreement.focus();
+      })
+      .catch(() => {
+        gate.hidden = false;
+        agreement.focus();
+      });
   }
 
   gate.addEventListener('keydown', event => {
@@ -251,7 +261,7 @@ function initializeAccessGate() {
     }
     trapFocus(gate, event);
   });
-  window.setTimeout(() => agreement.focus(), 0);
+  if (!accepted) window.setTimeout(() => agreement.focus(), 0);
 
   agreement.addEventListener('change', () => {
     updateContinueState();

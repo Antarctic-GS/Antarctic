@@ -541,6 +541,16 @@ async function handleRequest(request, response) {
     return;
   }
 
+  if (url.pathname === '/api/captcha/access') {
+    if (request.method !== 'GET') {
+      sendJson(response, 405, { error: 'Use GET to check access.' });
+      return;
+    }
+
+    sendJson(response, 200, { authorized: hasAccess(request) });
+    return;
+  }
+
   if (url.pathname === '/api/captcha/verify') {
     if (request.method === 'OPTIONS') {
       response.writeHead(204, {
